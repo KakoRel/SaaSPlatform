@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
+import 'email_confirmation_screen.dart';
 
 class AuthForm extends ConsumerStatefulWidget {
   const AuthForm({super.key});
@@ -47,10 +48,11 @@ class _AuthFormState extends ConsumerState<AuthForm> {
         );
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Регистрация успешна! Проверьте email для подтверждения.'),
-              backgroundColor: Colors.green,
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EmailConfirmationScreen(
+                email: _emailController.text.trim(),
+              ),
             ),
           );
         }
@@ -103,142 +105,238 @@ class _AuthFormState extends ConsumerState<AuthForm> {
     final authState = ref.watch(authNotifierProvider);
     
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.dashboard,
-                  size: 100,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'TaskFlow',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'SaaS Task Management Platform',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.blue[400]!,
+              Colors.blue[600]!,
+              Colors.blue[800]!,
+            ],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Card(
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.dashboard,
+                          size: 40,
+                          color: Colors.blue[600],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'TaskFlow',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[900],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'SaaS Task Management Platform',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
                 
-                if (!_isLogin) ...[
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Имя',
-                      hintText: 'Введите ваше имя',
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                    validator: _validateName,
-                    enabled: !_isLoading,
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                      if (!_isLogin) ...[
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Имя',
+                            hintText: 'Введите ваше имя',
+                            prefixIcon: const Icon(Icons.person, color: Colors.blue),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.blue[200]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.blue[400]!),
+                            ),
+                            filled: true,
+                            fillColor: Colors.blue[50],
+                          ),
+                          validator: _validateName,
+                          enabled: !_isLoading,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                 
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Введите ваш email',
-                    prefixIcon: Icon(Icons.email),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'Введите ваш email',
+                          prefixIcon: const Icon(Icons.email, color: Colors.blue),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.blue[200]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.blue[400]!),
+                          ),
+                          filled: true,
+                          fillColor: Colors.blue[50],
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      TextFormField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(
+                          labelText: 'Пароль',
+                          hintText: 'Введите пароль',
+                          prefixIcon: const Icon(Icons.lock, color: Colors.blue),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              color: Colors.blue[400],
+                            ),
+                            onPressed: () {
+                              setState(() => _obscurePassword = !_obscurePassword);
+                            },
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.blue[200]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.blue[400]!),
+                          ),
+                          filled: true,
+                          fillColor: Colors.blue[50],
+                        ),
+                        obscureText: _obscurePassword,
+                        validator: _validatePassword,
+                        enabled: !_isLoading,
+                      ),
+                      const SizedBox(height: 24),
+                
+                      if (authState.error != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            border: Border.all(color: Colors.red[200]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  authState.error!,
+                                  style: TextStyle(color: Colors.red[700]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: (_isLoading || authState.isLoading) ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[600],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                          ),
+                          child: (_isLoading || authState.isLoading)
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Text(
+                                  _isLogin ? 'Войти' : 'Зарегистрироваться',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      TextButton(
+                        onPressed: _isLoading ? null : () {
+                          setState(() {
+                            _isLogin = !_isLogin;
+                            _formKey.currentState?.reset();
+                          });
+                        },
+                        child: Text(
+                          _isLogin 
+                              ? 'Нет аккаунта? Зарегистрироваться'
+                              : 'Уже есть аккаунт? Войти',
+                          style: TextStyle(
+                            color: Colors.blue[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      
+                      if (_isLogin) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _isLoading ? null : () {
+                            _showResetPasswordDialog();
+                          },
+                          child: Text(
+                            'Забыли пароль?',
+                            style: TextStyle(
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: _validateEmail,
-                  enabled: !_isLoading,
                 ),
-                const SizedBox(height: 16),
-                
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Пароль',
-                    hintText: 'Введите пароль',
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                  ),
-                  obscureText: _obscurePassword,
-                  validator: _validatePassword,
-                  enabled: !_isLoading,
-                ),
-                const SizedBox(height: 24),
-                
-                if (authState.error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      border: Border.all(color: Colors.red[200]!),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      authState.error!,
-                      style: TextStyle(color: Colors.red[700]),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                ElevatedButton(
-                  onPressed: (_isLoading || authState.isLoading) ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: (_isLoading || authState.isLoading)
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isLogin ? 'Войти' : 'Зарегистрироваться'),
-                ),
-                const SizedBox(height: 16),
-                
-                TextButton(
-                  onPressed: _isLoading ? null : () {
-                    setState(() {
-                      _isLogin = !_isLogin;
-                      _formKey.currentState?.reset();
-                    });
-                  },
-                  child: Text(
-                    _isLogin 
-                        ? 'Нет аккаунта? Зарегистрироваться'
-                        : 'Уже есть аккаунт? Войти',
-                  ),
-                ),
-                
-                if (_isLogin) ...[
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _isLoading ? null : () {
-                      _showResetPasswordDialog();
-                    },
-                    child: const Text('Забыли пароль?'),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),

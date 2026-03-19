@@ -8,6 +8,7 @@ import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/presentation/widgets/auth_form.dart';
 import 'features/kanban/presentation/widgets/kanban_board.dart';
 import 'features/kanban/providers/kanban_provider.dart';
+import 'shared/presentation/widgets/loading_screen.dart';
 
 class SupabaseInitializationState {
   const SupabaseInitializationState({
@@ -74,9 +75,7 @@ class MyApp extends ConsumerWidget {
     }
 
     if (authState.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const LoadingScreen();
     }
 
     if (authState.user == null) {
