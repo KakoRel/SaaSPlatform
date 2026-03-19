@@ -15,6 +15,8 @@ class KanbanState {
     this.error,
     this.currentProjectId,
     this.isRealtimeConnected = false,
+    this.isDemoData = false,
+    this.demoMessage,
   });
 
   final Map<TaskStatus, List<Task>> tasksByStatus;
@@ -22,6 +24,8 @@ class KanbanState {
   final String? error;
   final String? currentProjectId;
   final bool isRealtimeConnected;
+  final bool isDemoData;
+  final String? demoMessage;
 
   KanbanState copyWith({
     Map<TaskStatus, List<Task>>? tasksByStatus,
@@ -30,6 +34,9 @@ class KanbanState {
     String? currentProjectId,
     bool? isRealtimeConnected,
     bool clearError = false,
+    bool? isDemoData,
+    String? demoMessage,
+    bool clearDemoMessage = false,
   }) {
     return KanbanState(
       tasksByStatus: tasksByStatus ?? this.tasksByStatus,
@@ -37,6 +44,8 @@ class KanbanState {
       error: clearError ? null : (error ?? this.error),
       currentProjectId: currentProjectId ?? this.currentProjectId,
       isRealtimeConnected: isRealtimeConnected ?? this.isRealtimeConnected,
+      isDemoData: isDemoData ?? this.isDemoData,
+      demoMessage: clearDemoMessage ? null : (demoMessage ?? this.demoMessage),
     );
   }
 }
@@ -54,23 +63,29 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       isLoading: true,
       clearError: true,
       currentProjectId: projectId,
+      clearDemoMessage: true,
     );
+
+    if (!_supabaseService.isInitialized) {
+      _activateDemoMode(
+        message: 'Supabase не настроен. Показаны демо-данные Kanban доски.',
+      );
+      return;
+    }
 
     try {
       await _checkProjectAccess(projectId);
 
       final tasks = await _fetchTasks(projectId);
 
-      // Group tasks by status
-      final tasksByStatus = <TaskStatus, List<Task>>{};
-      for (final status in TaskStatus.values) {
-        tasksByStatus[status] = [];
-      }
+      final tasksByStatus = <TaskStatus, List<Task>>{
+        for (final status in TaskStatus.values) status: [],
+      };
+
       for (final task in tasks) {
         tasksByStatus[task.status]!.add(task);
       }
 
-      // Sort by position
       for (final status in TaskStatus.values) {
         tasksByStatus[status]!.sort((a, b) => a.position.compareTo(b.position));
       }
@@ -78,9 +93,26 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       state = state.copyWith(
         tasksByStatus: tasksByStatus,
         isLoading: false,
+        isDemoData: false,
       );
 
       _setupRealtimeSubscription(projectId);
+    } on AuthorizationException {
+      _activateDemoMode(
+        message: 'Пользователь не является участником проекта. Показаны демо-данные.',
+      );
+    } on ServerException catch (e) {
+      if (e.message.contains('not initialized')) {
+        _activateDemoMode(
+          message: 'Supabase клиент недоступен. Показаны демо-данные.',
+        );
+        return;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        error: e.message,
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -90,12 +122,17 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Future<void> _checkProjectAccess(String projectId) async {
+    final userId = _supabaseService.currentUserId;
+    if (userId == null) {
+      throw const AuthorizationException('User not authenticated');
+    }
+
     final member = await _supabaseService.fetchSingle<Map<String, dynamic>>(
       tableName: 'project_members',
       fromJson: (json) => json,
       filters: [
         QueryFilter('project_id', 'eq', projectId),
-        QueryFilter('user_id', 'eq', _supabaseService.currentUserId!),
+        QueryFilter('user_id', 'eq', userId),
       ],
     );
 
@@ -106,7 +143,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
 
   Future<List<Task>> _fetchTasks(String projectId) async {
     final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
-      tableName: 'project_tasks',
+      tableName: 'tasks',
       fromJson: (json) => json,
       filters: [
         QueryFilter('project_id', 'eq', projectId),
@@ -119,6 +156,10 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
 
   void _setupRealtimeSubscription(String projectId) {
     _tasksChannel?.unsubscribe();
+
+    if (state.isDemoData) {
+      return;
+    }
 
     _tasksChannel = _supabaseService.subscribeToTable(
       tableName: 'tasks',
@@ -133,6 +174,10 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   void _handleRealtimeEvent(PostgresChangePayload payload) {
+    if (state.isDemoData) {
+      return;
+    }
+
     final eventType = payload.eventType;
     final newRecord = payload.newRecord;
     final oldRecord = payload.oldRecord;
@@ -172,6 +217,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? assigneeId,
     TaskPriority priority = TaskPriority.medium,
   }) async {
+    if (state.isDemoData) {
+      state = state.copyWith(
+        error: 'Демо-режим: создание задач недоступно. Подключите Supabase проект.',
+      );
+      return;
+    }
+
     if (state.currentProjectId == null) return;
 
     try {
@@ -198,6 +250,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     required TaskStatus newStatus,
     required int newPosition,
   }) async {
+    if (state.isDemoData) {
+      state = state.copyWith(
+        error: 'Демо-режим: обновление статуса недоступно. Подключите Supabase проект.',
+      );
+      return;
+    }
+
     try {
       await _supabaseService.update<Map<String, dynamic>>(
         tableName: 'tasks',
@@ -221,6 +280,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     TaskPriority? priority,
     DateTime? dueDate,
   }) async {
+    if (state.isDemoData) {
+      state = state.copyWith(
+        error: 'Демо-режим: изменение задач недоступно. Подключите Supabase проект.',
+      );
+      return;
+    }
+
     try {
       final updateData = <String, dynamic>{};
       if (title != null) updateData['title'] = title;
@@ -241,6 +307,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Future<void> deleteTask(String taskId) async {
+    if (state.isDemoData) {
+      state = state.copyWith(
+        error: 'Демо-режим: удаление задач недоступно. Подключите Supabase проект.',
+      );
+      return;
+    }
+
     try {
       await _supabaseService.delete(tableName: 'tasks', id: taskId);
     } catch (e) {
@@ -294,6 +367,104 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
 
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  void _activateDemoMode({required String message}) {
+    state = state.copyWith(
+      tasksByStatus: _generateDemoData(),
+      isLoading: false,
+      isDemoData: true,
+      demoMessage: message,
+      clearError: true,
+    );
+  }
+
+  Map<TaskStatus, List<Task>> _generateDemoData() {
+    final demoUser = TaskMember(
+      id: 'demo-user',
+      email: 'demo@taskflow.com',
+      fullName: 'Demo User',
+    );
+
+    final now = DateTime.now();
+
+    Task createTask({
+      required String id,
+      required String title,
+      required TaskStatus status,
+      TaskPriority priority = TaskPriority.medium,
+      String? description,
+      int position = 0,
+      DateTime? dueDate,
+    }) {
+      return Task(
+        id: id,
+        projectId: 'demo-project',
+        title: title,
+        description: description,
+        assigneeId: demoUser.id,
+        creatorId: demoUser.id,
+        status: status,
+        priority: priority,
+        dueDate: dueDate,
+        position: position,
+        createdAt: now.subtract(const Duration(days: 3)),
+        updatedAt: now.subtract(const Duration(hours: 6)),
+        assignee: demoUser,
+        creator: demoUser,
+      );
+    }
+
+    return {
+      TaskStatus.todo: [
+        createTask(
+          id: 'demo-task-1',
+          title: 'Настроить Supabase проект',
+          description: 'Создайте проект, настройте таблицы и RLS политики.',
+          status: TaskStatus.todo,
+          priority: TaskPriority.high,
+        ),
+        createTask(
+          id: 'demo-task-2',
+          title: 'Прописать переменные окружения',
+          description: 'Обновите SUPABASE_URL и SUPABASE_ANON_KEY в app_constants.dart.',
+          status: TaskStatus.todo,
+          priority: TaskPriority.medium,
+          position: 1,
+        ),
+      ],
+      TaskStatus.inProgress: [
+        createTask(
+          id: 'demo-task-3',
+          title: 'Подготовить GitHub Actions',
+          description: 'Настройте секреты и проверьте деплой.',
+          status: TaskStatus.inProgress,
+          priority: TaskPriority.high,
+          position: 0,
+        ),
+      ],
+      TaskStatus.review: [
+        createTask(
+          id: 'demo-task-4',
+          title: 'Проверить drag & drop',
+          description: 'Убедитесь, что перетаскивание работает на десктопе.',
+          status: TaskStatus.review,
+          priority: TaskPriority.medium,
+          position: 0,
+        ),
+      ],
+      TaskStatus.done: [
+        createTask(
+          id: 'demo-task-5',
+          title: 'Запустить ./deploy.sh',
+          description: 'Поднимите приложение на сервере через Docker.',
+          status: TaskStatus.done,
+          priority: TaskPriority.low,
+          position: 0,
+          dueDate: now.subtract(const Duration(days: 1)),
+        ),
+      ],
+    };
   }
 
   @override

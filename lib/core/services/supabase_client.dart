@@ -13,12 +13,23 @@ class SupabaseClientService {
   static SupabaseClientService? _instance;
   static SupabaseClientService get instance => _instance ??= SupabaseClientService._();
 
-  late SupabaseClient _client;
-  SupabaseClient get client => _client;
+  SupabaseClient? _client;
+  bool _isInitialized = false;
+  String? _initializationError;
+
+  SupabaseClient get client {
+    return _requireClient();
+  }
+
+  bool get isInitialized => _isInitialized;
+  String? get initializationError => _initializationError;
 
   StreamSubscription<AuthState>? _authSubscription;
 
   Future<void> initialize() async {
+    _isInitialized = false;
+    _initializationError = null;
+
     try {
       await Supabase.initialize(
         url: AppConstants.supabaseUrl,
@@ -29,7 +40,11 @@ class SupabaseClientService {
       );
 
       _client = Supabase.instance.client;
+      _isInitialized = true;
     } catch (e) {
+      _initializationError = e.toString();
+      _isInitialized = false;
+      _client = null;
       throw ServerException('Failed to initialize Supabase: ${e.toString()}');
     }
   }
@@ -39,8 +54,9 @@ class SupabaseClientService {
     required String email,
     required String password,
   }) async {
+    final client = _requireClient();
     try {
-      final response = await _client.auth.signInWithPassword(
+      final response = await client.auth.signInWithPassword(
         email: email,
         password: password,
       );
@@ -57,8 +73,9 @@ class SupabaseClientService {
     required String password,
     String? fullName,
   }) async {
+    final client = _requireClient();
     try {
-      final response = await _client.auth.signUp(
+      final response = await client.auth.signUp(
         email: email,
         password: password,
         data: fullName != null ? {'full_name': fullName} : null,
@@ -72,16 +89,18 @@ class SupabaseClientService {
   }
 
   Future<void> signOut() async {
+    final client = _requireClient();
     try {
-      await _client.auth.signOut();
+      await client.auth.signOut();
     } catch (e) {
       throw ServerException('Failed to sign out: ${e.toString()}');
     }
   }
 
   Future<void> resetPassword(String email) async {
+    final client = _requireClient();
     try {
-      await _client.auth.resetPasswordForEmail(email);
+      await client.auth.resetPasswordForEmail(email);
     } on AuthException catch (e) {
       throw AuthenticationException(e.message);
     } catch (e) {
@@ -90,8 +109,9 @@ class SupabaseClientService {
   }
 
   Future<void> updatePassword(String newPassword) async {
+    final client = _requireClient();
     try {
-      await _client.auth.updateUser(
+      await client.auth.updateUser(
         UserAttributes(password: newPassword),
       );
     } on AuthException catch (e) {
@@ -111,8 +131,9 @@ class SupabaseClientService {
     int? limit,
     int? offset,
   }) async {
+    final client = _requireClient();
     try {
-      var query = _client.from(tableName).select(select ?? '*');
+      var query = client.from(tableName).select(select ?? '*');
 
       if (filters != null) {
         for (final filter in filters) {
@@ -150,8 +171,9 @@ class SupabaseClientService {
     String? select,
     List<QueryFilter>? filters,
   }) async {
+    final client = _requireClient();
     try {
-      var query = _client.from(tableName).select(select ?? '*');
+      var query = client.from(tableName).select(select ?? '*');
 
       if (filters != null) {
         for (final filter in filters) {
@@ -174,8 +196,9 @@ class SupabaseClientService {
     required T Function(Map<String, dynamic>) fromJson,
     String? select,
   }) async {
+    final client = _requireClient();
     try {
-      final response = await _client.from(tableName).insert(data).select(select ?? '*').single();
+      final response = await client.from(tableName).insert(data).select(select ?? '*').single();
       return fromJson(response);
     } on PostgrestException catch (e) {
       throw ServerException('Insert operation failed: ${e.message}');
@@ -191,8 +214,9 @@ class SupabaseClientService {
     required T Function(Map<String, dynamic>) fromJson,
     String? select,
   }) async {
+    final client = _requireClient();
     try {
-      final response = await _client
+      final response = await client
           .from(tableName)
           .update(data)
           .eq('id', id)
@@ -210,8 +234,9 @@ class SupabaseClientService {
     required String tableName,
     required String id,
   }) async {
+    final client = _requireClient();
     try {
-      await _client.from(tableName).delete().eq('id', id);
+      await client.from(tableName).delete().eq('id', id);
     } on PostgrestException catch (e) {
       throw ServerException('Delete operation failed: ${e.message}');
     } catch (e) {
@@ -225,7 +250,8 @@ class SupabaseClientService {
     required String channelId,
     required void Function(PostgresChangePayload payload) callback,
   }) {
-    return _client.channel(channelId).onPostgresChanges(
+    final client = _requireClient();
+    return client.channel(channelId).onPostgresChanges(
       event: PostgresChangeEvent.all,
       schema: 'public',
       table: tableName,
@@ -240,8 +266,9 @@ class SupabaseClientService {
     required Uint8List bytes,
     String? contentType,
   }) async {
+    final client = _requireClient();
     try {
-      final response = await _client.storage
+      final response = await client.storage
           .from(bucket)
           .uploadBinary(
             path,
@@ -260,15 +287,17 @@ class SupabaseClientService {
     required String bucket,
     required String path,
   }) {
-    return _client.storage.from(bucket).getPublicUrl(path);
+    final client = _requireClient();
+    return client.storage.from(bucket).getPublicUrl(path);
   }
 
   Future<void> deleteFile({
     required String bucket,
     required String path,
   }) async {
+    final client = _requireClient();
     try {
-      await _client.storage.from(bucket).remove([path]);
+      await client.storage.from(bucket).remove([path]);
     } on StorageException catch (e) {
       throw AppStorageException('Failed to delete file: ${e.message}', path);
     } catch (e) {
@@ -277,15 +306,20 @@ class SupabaseClientService {
   }
 
   // Utility methods
-  User? get currentUser => _client.auth.currentUser;
-  String? get currentUserId => _client.auth.currentUser?.id;
-  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+  User? get currentUser => _isInitialized ? _client?.auth.currentUser : null;
+  String? get currentUserId => currentUser?.id;
+  Stream<AuthState> get authStateChanges =>
+      _isInitialized && _client != null ? _client!.auth.onAuthStateChange : const Stream.empty();
 
   bool get isAuthenticated => currentUser != null;
 
   Future<bool> isTokenValid() async {
+    if (!_isInitialized || _client == null) {
+      return false;
+    }
+
     try {
-      final session = _client.auth.currentSession;
+      final session = _client!.auth.currentSession;
       return session?.expiresAt != null &&
              DateTime.now().isBefore(
                DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000),
@@ -297,6 +331,14 @@ class SupabaseClientService {
 
   void dispose() {
     _authSubscription?.cancel();
+    _authSubscription = null;
+  }
+
+  SupabaseClient _requireClient() {
+    if (!_isInitialized || _client == null) {
+      throw const ServerException('Supabase client is not initialized');
+    }
+    return _client!;
   }
 }
 
