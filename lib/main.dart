@@ -5,6 +5,7 @@ import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/supabase_client.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/auth/presentation/widgets/auth_form.dart';
 import 'features/kanban/presentation/widgets/kanban_board.dart';
 import 'features/kanban/providers/kanban_provider.dart';
 
@@ -79,7 +80,7 @@ class MyApp extends ConsumerWidget {
     }
 
     if (authState.user == null) {
-      return const LoginPage();
+      return const AuthForm();
     }
 
     return KanbanBoardWrapper(kanbanState: kanbanState);
@@ -132,73 +133,6 @@ class KanbanBoardWrapper extends StatelessWidget {
             child: KanbanBoardWidget(projectId: kanbanState.currentProjectId ?? 'demo-project'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class LoginPage extends ConsumerWidget {
-  const LoginPage({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.dashboard,
-                size: 100,
-                color: Colors.blue,
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'TaskFlow',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'SaaS Task Management Platform',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: () async {
-                  try {
-                    await ref.read(authNotifierProvider.notifier).signInWithEmail(
-                      email: 'demo@taskflow.com',
-                      password: 'password123',
-                    );
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
-                    }
-                  }
-                },
-                child: const Text('Demo Login'),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Use demo@taskflow.com / password123',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
