@@ -57,8 +57,8 @@ flutter run -d chrome
 ```bash
 # На VPS
 curl -fsSL https://get.docker.com | sh
-git clone https://github.com/your-username/saas-platform.git /opt/saas-platform
-cd /opt/saas-platform
+git clone https://github.com/KakoRel/SaaSPlatform.git /opt/SaaSPlatform
+cd /opt/SaaSPlatform
 chmod +x deploy.sh
 ./deploy.sh
 ```
