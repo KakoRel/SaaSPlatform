@@ -107,25 +107,6 @@ lib/
 - [Supabase документация](https://supabase.com/docs)
 - [Flutter Web документация](https://docs.flutter.dev/platform-integration/web)
 
-## 🤝 Вклад в проект
-
-1. Fork проекта
-2. Создайте feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit изменения (`git commit -m 'Add some AmazingFeature'`)
-4. Push в branch (`git push origin feature/AmazingFeature`)
-5. Откройте Pull Request
-
 ## 📝 Лицензия
 
 MIT License
-
-## 👨‍💻 Автор
-
-Ваше имя - [@your-username](https://github.com/your-username)
-
-## 🙏 Благодарности
-
-- [Flutter](https://flutter.dev)
-- [Supabase](https://supabase.com)
-- [Riverpod](https://riverpod.dev)
-- [Material Design 3](https://m3.material.io)
