@@ -1,15 +1,27 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
+class BaseModel {
+  const BaseModel({
+    required this.id,
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
-part 'base_model.freezed.dart';
-part 'base_model.g.dart';
+  final String id;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-@freezed
-class BaseModel with _$BaseModel {
-  const factory BaseModel({
-    required String id,
-    required DateTime createdAt,
-    required DateTime updatedAt,
-  }) = _BaseModel;
+  factory BaseModel.fromJson(Map<String, dynamic> json) {
+    return BaseModel(
+      id: json['id'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
 
-  factory BaseModel.fromJson(Map<String, dynamic> json) => _$BaseModelFromJson(json);
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
 }

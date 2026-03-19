@@ -1,8 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/supabase_client.dart';
-import '../../features/auth/providers/auth_provider.dart';
+import '../../features/kanban/domain/entities/task.dart';
 
 enum Permission {
   view,
@@ -17,7 +17,14 @@ enum ProjectRole {
   owner,
   admin,
   member,
-  viewer,
+  viewer;
+
+  static ProjectRole fromString(String value) {
+    return ProjectRole.values.firstWhere(
+      (role) => role.name == value,
+      orElse: () => ProjectRole.viewer,
+    );
+  }
 }
 
 class RLSUtils {
@@ -29,17 +36,14 @@ class RLSUtils {
         tableName: 'project_members',
         fromJson: (json) => json,
         filters: [
-          Filter('project_id', 'eq', projectId),
-          Filter('user_id', 'eq', SupabaseClientService.instance.currentUserId!),
+          QueryFilter('project_id', 'eq', projectId),
+          QueryFilter('user_id', 'eq', SupabaseClientService.instance.currentUserId!),
         ],
       );
 
       if (memberData == null) return null;
-      
-      return ProjectRole.values.firstWhere(
-        (role) => role.name == memberData['role'],
-        orElse: () => ProjectRole.viewer,
-      );
+
+      return ProjectRole.fromString(memberData['role'] as String? ?? 'viewer');
     } catch (e) {
       return null;
     }
@@ -48,54 +52,30 @@ class RLSUtils {
   static bool hasPermission(ProjectRole role, Permission permission) {
     switch (permission) {
       case Permission.view:
-        return true; // All members can view
-      
+        return true;
       case Permission.create:
-        return role == ProjectRole.owner || 
-               role == ProjectRole.admin || 
-               role == ProjectRole.member;
-      
       case Permission.update:
-        return role == ProjectRole.owner || 
-               role == ProjectRole.admin || 
+        return role == ProjectRole.owner ||
+               role == ProjectRole.admin ||
                role == ProjectRole.member;
-      
       case Permission.delete:
-        return role == ProjectRole.owner || 
-               role == ProjectRole.admin;
-      
       case Permission.invite:
-        return role == ProjectRole.owner || 
-               role == ProjectRole.admin;
-      
       case Permission.manage:
-        return role == ProjectRole.owner || 
+        return role == ProjectRole.owner ||
                role == ProjectRole.admin;
     }
   }
 
   static bool canEditTask(Task task, ProjectRole userRole) {
-    // Task creator can always edit
-    if (task.creatorId == SupabaseClientService.instance.currentUserId) {
-      return true;
-    }
-    
-    // Task assignee can edit (limited fields)
-    if (task.assigneeId == SupabaseClientService.instance.currentUserId) {
-      return true;
-    }
-    
-    // Project members with sufficient role can edit
+    final currentUserId = SupabaseClientService.instance.currentUserId;
+    if (task.creatorId == currentUserId) return true;
+    if (task.assigneeId == currentUserId) return true;
     return hasPermission(userRole, Permission.update);
   }
 
   static bool canDeleteTask(Task task, ProjectRole userRole) {
-    // Task creator can delete
-    if (task.creatorId == SupabaseClientService.instance.currentUserId) {
-      return true;
-    }
-    
-    // Project admins and owners can delete
+    final currentUserId = SupabaseClientService.instance.currentUserId;
+    if (task.creatorId == currentUserId) return true;
     return hasPermission(userRole, Permission.delete);
   }
 
@@ -110,16 +90,7 @@ class RLSUtils {
 
 // Permission providers for UI
 final projectRoleProvider = FutureProvider.family<ProjectRole?, String>((ref, projectId) async {
-  return await RLSUtils.getUserProjectRole(projectId);
-});
-
-final canViewProjectProvider = Provider.family<bool, String>((ref, projectId) {
-  final roleAsync = ref.watch(projectRoleProvider(projectId));
-  return roleAsync.when(
-    data: (role) => role != null,
-    loading: () => false,
-    error: (_, __) => false,
-  );
+  return RLSUtils.getUserProjectRole(projectId);
 });
 
 final canCreateTaskProvider = Provider.family<bool, String>((ref, projectId) {
@@ -127,7 +98,7 @@ final canCreateTaskProvider = Provider.family<bool, String>((ref, projectId) {
   return roleAsync.when(
     data: (role) => role != null ? RLSUtils.hasPermission(role, Permission.create) : false,
     loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 
@@ -136,7 +107,7 @@ final canInviteMembersProvider = Provider.family<bool, String>((ref, projectId) 
   return roleAsync.when(
     data: (role) => role != null ? RLSUtils.canInviteMembers(role) : false,
     loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 
@@ -145,26 +116,7 @@ final canManageProjectProvider = Provider.family<bool, String>((ref, projectId) 
   return roleAsync.when(
     data: (role) => role != null ? RLSUtils.canManageProject(role) : false,
     loading: () => false,
-    error: (_, __) => false,
-  );
-});
-
-// Task-specific permission providers
-final taskPermissionProvider = Provider.family<bool, Task>((ref, task) {
-  final roleAsync = ref.watch(projectRoleProvider(task.projectId));
-  return roleAsync.when(
-    data: (role) => role != null ? RLSUtils.canEditTask(task, role) : false,
-    loading: () => false,
-    error: (_, __) => false,
-  );
-});
-
-final canDeleteTaskProvider = Provider.family<bool, Task>((ref, task) {
-  final roleAsync = ref.watch(projectRoleProvider(task.projectId));
-  return roleAsync.when(
-    data: (role) => role != null ? RLSUtils.canDeleteTask(task, role) : false,
-    loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });
 
@@ -195,94 +147,7 @@ class PermissionGuard extends ConsumerWidget {
         return fallback ?? const SizedBox.shrink();
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => fallback ?? const SizedBox.shrink(),
+      error: (_, _) => fallback ?? const SizedBox.shrink(),
     );
-  }
-}
-
-// Task permission widget helper
-class TaskPermissionGuard extends ConsumerWidget {
-  const TaskPermissionGuard({
-    super.key,
-    required this.task,
-    required this.canEdit,
-    required this.child,
-    this.fallback,
-  });
-
-  final Task task;
-  final bool canEdit;
-  final Widget child;
-  final Widget? fallback;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final hasPermission = ref.watch(taskPermissionProvider(task));
-
-    if (canEdit && hasPermission) {
-      return child;
-    }
-    return fallback ?? const SizedBox.shrink();
-  }
-}
-
-// RLS check utility functions for common operations
-class RLSChecks {
-  RLSChecks._();
-
-  static Future<bool> canAccessProject(String projectId) async {
-    final role = await RLSUtils.getUserProjectRole(projectId);
-    return role != null;
-  }
-
-  static Future<bool> canCreateTaskInProject(String projectId) async {
-    final role = await RLSUtils.getUserProjectRole(projectId);
-    return role != null && RLSUtils.hasPermission(role, Permission.create);
-  }
-
-  static Future<bool> canInviteToProject(String projectId) async {
-    final role = await RLSUtils.getUserProjectRole(projectId);
-    return role != null && RLSUtils.canInviteMembers(role);
-  }
-
-  static Future<bool> canManageProjectSettings(String projectId) async {
-    final role = await RLSUtils.getUserProjectRole(projectId);
-    return role != null && RLSUtils.canManageProject(role);
-  }
-
-  static Future<bool> canEditTask(Task task) async {
-    final role = await RLSUtils.getUserProjectRole(task.projectId);
-    return role != null && RLSUtils.canEditTask(task, role);
-  }
-
-  static Future<bool> canDeleteTask(Task task) async {
-    final role = await RLSUtils.getUserProjectRole(task.projectId);
-    return role != null && RLSUtils.canDeleteTask(task, role);
-  }
-
-  // Quick RLS check for UI (synchronous, uses cached role)
-  static bool canEditTaskSync(Task task, ProjectRole? userRole) {
-    if (userRole == null) return false;
-    return RLSUtils.canEditTask(task, userRole);
-  }
-
-  static bool canDeleteTaskSync(Task task, ProjectRole? userRole) {
-    if (userRole == null) return false;
-    return RLSUtils.canDeleteTask(task, userRole);
-  }
-
-  static bool canCreateTaskSync(ProjectRole? userRole) {
-    if (userRole == null) return false;
-    return RLSUtils.hasPermission(userRole, Permission.create);
-  }
-
-  static bool canInviteMembersSync(ProjectRole? userRole) {
-    if (userRole == null) return false;
-    return RLSUtils.canInviteMembers(userRole);
-  }
-
-  static bool canManageProjectSync(ProjectRole? userRole) {
-    if (userRole == null) return false;
-    return RLSUtils.canManageProject(userRole);
   }
 }

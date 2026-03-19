@@ -13,52 +13,52 @@ abstract class AppException extends Equatable implements Exception {
 }
 
 class ServerException extends AppException {
-  const ServerException(String message, [this.statusCode]) : super(message);
+  const ServerException(super.message, [this.statusCode]);
 
   final int? statusCode;
 
   @override
-  List<Object> get props => [...super.props, statusCode];
+  List<Object> get props => [...super.props, ?statusCode];
 }
 
 class NetworkException extends AppException {
-  const NetworkException(String message) : super(message);
+  const NetworkException(super.message);
 }
 
 class ValidationException extends AppException {
-  const ValidationException(String message, [this.field]) : super(message);
+  const ValidationException(super.message, [this.field]);
 
   final String? field;
 
   @override
-  List<Object> get props => [...super.props, field];
+  List<Object> get props => [...super.props, ?field];
 }
 
 class AuthenticationException extends AppException {
-  const AuthenticationException(String message) : super(message);
+  const AuthenticationException(super.message);
 }
 
 class AuthorizationException extends AppException {
-  const AuthorizationException(String message) : super(message);
+  const AuthorizationException(super.message);
 }
 
 class CacheException extends AppException {
-  const CacheException(String message) : super(message);
+  const CacheException(super.message);
 }
 
-class StorageException extends AppException {
-  const StorageException(String message, [this.path]) : super(message);
+class AppStorageException extends AppException {
+  const AppStorageException(super.message, [this.path]);
 
   final String? path;
 
   @override
-  List<Object> get props => [...super.props, path];
+  List<Object> get props => [...super.props, ?path];
 }
 
 class ParseException extends AppException {
-  const ParseException(String message) : super(message);
+  const ParseException(super.message);
 }
 
 class UnknownException extends AppException {
-  const UnknownException(String message) : super(message);
+  const UnknownException(super.message);
 }

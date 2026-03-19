@@ -1,32 +1,51 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 
-import '../../domain/entities/user.dart';
+import '../domain/entities/user.dart';
 import '../../../core/services/supabase_client.dart';
 import '../../../core/errors/exceptions.dart';
 
-// Auth state
-@freezed
-class AuthState with _$AuthState {
-  const factory AuthState({
-    User? user,
-    @Default(false) bool isLoading,
+// Auth state (renamed to avoid conflict with Supabase AuthState)
+class AppAuthState {
+  const AppAuthState({
+    this.user,
+    this.isLoading = false,
+    this.error,
+    this.isAuthenticated = false,
+  });
+
+  final AppUser? user;
+  final bool isLoading;
+  final String? error;
+  final bool isAuthenticated;
+
+  AppAuthState copyWith({
+    AppUser? user,
+    bool? isLoading,
     String? error,
-    @Default(false) bool isAuthenticated,
-  }) = _AuthState;
+    bool? isAuthenticated,
+    bool clearUser = false,
+    bool clearError = false,
+  }) {
+    return AppAuthState(
+      user: clearUser ? null : (user ?? this.user),
+      isLoading: isLoading ?? this.isLoading,
+      error: clearError ? null : (error ?? this.error),
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+    );
+  }
 }
 
 // Auth provider
-class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._supabaseService) : super(const AuthState()) {
+class AuthNotifier extends StateNotifier<AppAuthState> {
+  AuthNotifier(this._supabaseService) : super(const AppAuthState()) {
     _initializeAuth();
   }
 
   final SupabaseClientService _supabaseService;
-  StreamSubscription<AuthState>? _authSubscription;
+  StreamSubscription<supa.AuthState>? _authSubscription;
 
   void _initializeAuth() {
     state = state.copyWith(isLoading: true);
@@ -73,17 +92,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  void _handleAuthStateChange(AuthState authState) {
+  void _handleAuthStateChange(supa.AuthState authState) {
     final session = authState.session;
-    
+
     if (session?.user != null) {
-      // User signed in
       _getUserDetails(session!.user.id).then((user) {
         state = state.copyWith(
           user: user,
           isAuthenticated: true,
           isLoading: false,
-          error: null,
+          clearError: true,
         );
       }).catchError((error) {
         state = state.copyWith(
@@ -93,23 +111,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       });
     } else {
-      // User signed out
       state = state.copyWith(
-        user: null,
+        clearUser: true,
         isAuthenticated: false,
         isLoading: false,
-        error: null,
+        clearError: true,
       );
     }
   }
 
-  Future<User> _getUserDetails(String userId) async {
+  Future<AppUser> _getUserDetails(String userId) async {
     try {
       final userData = await _supabaseService.fetchSingle<Map<String, dynamic>>(
         tableName: 'users',
         fromJson: (json) => json,
         filters: [
-          Filter('id', 'eq', userId),
+          QueryFilter('id', 'eq', userId),
         ],
       );
 
@@ -117,7 +134,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         throw const AuthenticationException('User not found');
       }
 
-      return User.fromJson(userData);
+      return AppUser.fromJson(userData);
     } catch (e) {
       throw AuthenticationException('Failed to get user details: ${e.toString()}');
     }
@@ -127,15 +144,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await _supabaseService.signInWithEmail(
         email: email,
         password: password,
       );
-
-      // Auth state change will be handled by the stream listener
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -149,7 +164,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
     String? fullName,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await _supabaseService.signUpWithEmail(
@@ -157,9 +172,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
         fullName: fullName,
       );
-
-      // Note: User will need to confirm email if enabled in Supabase
-      // Auth state change will be handled by the stream listener
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -169,11 +181,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await _supabaseService.signOut();
-      // Auth state change will be handled by the stream listener
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -183,7 +194,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> resetPassword(String email) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await _supabaseService.resetPassword(email);
@@ -197,7 +208,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> updatePassword(String newPassword) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await _supabaseService.updatePassword(newPassword);
@@ -214,7 +225,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? fullName,
     String? avatarUrl,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final userId = _supabaseService.currentUserId;
@@ -239,7 +250,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
 
       state = state.copyWith(
-        user: User.fromJson(updatedUser),
+        user: AppUser.fromJson(updatedUser),
         isLoading: false,
       );
     } catch (e) {
@@ -251,7 +262,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void clearError() {
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
   }
 
   @override
@@ -266,32 +277,28 @@ final authServiceProvider = Provider<SupabaseClientService>((ref) {
   return SupabaseClientService.instance;
 });
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authNotifierProvider = StateNotifierProvider<AuthNotifier, AppAuthState>((ref) {
   final supabaseService = ref.watch(authServiceProvider);
   return AuthNotifier(supabaseService);
 });
 
-final currentUserProvider = Provider<User?>((ref) {
-  return ref.watch(authProvider).user;
+final currentUserProvider = Provider<AppUser?>((ref) {
+  return ref.watch(authNotifierProvider).user;
 });
 
 final isAuthenticatedProvider = Provider<bool>((ref) {
-  return ref.watch(authProvider).isAuthenticated;
+  return ref.watch(authNotifierProvider).isAuthenticated;
 });
 
 // Auth guards
 final authGuardProvider = Provider<bool>((ref) {
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
-  final isLoading = ref.watch(authProvider.select((state) => state.isLoading));
-  
-  // Return true only when we know the auth state (not loading)
+  final isLoading = ref.watch(authNotifierProvider.select((s) => s.isLoading));
   return !isLoading && isAuthenticated;
 });
 
 final unauthenticatedGuardProvider = Provider<bool>((ref) {
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
-  final isLoading = ref.watch(authProvider.select((state) => state.isLoading));
-  
-  // Return true only when we know the user is not authenticated (not loading)
+  final isLoading = ref.watch(authNotifierProvider.select((s) => s.isLoading));
   return !isLoading && !isAuthenticated;
 });

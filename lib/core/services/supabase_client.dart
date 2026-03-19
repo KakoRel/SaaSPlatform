@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:universal_html/html.dart' as html;
 
 import '../constants/app_constants.dart';
 import '../errors/exceptions.dart';
@@ -24,43 +23,14 @@ class SupabaseClientService {
       await Supabase.initialize(
         url: AppConstants.supabaseUrl,
         anonKey: AppConstants.supabaseAnonKey,
-        authOptions: const AuthOptions(
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: true,
-        ),
         realtimeClientOptions: const RealtimeClientOptions(
           eventsPerSecond: 40,
-        ),
-        storageOptions: const StorageClientOptions(
-          retryAttempts: 3,
         ),
       );
 
       _client = Supabase.instance.client;
-      
-      // Handle deep links for web auth
-      if (AppConstants.isWeb) {
-        _handleWebAuth();
-      }
     } catch (e) {
       throw ServerException('Failed to initialize Supabase: ${e.toString()}');
-    }
-  }
-
-  void _handleWebAuth() {
-    if (!AppConstants.isWeb) return;
-
-    // Check for OAuth callback
-    final uri = Uri.base;
-    final fragments = uri.fragment.split('&');
-    
-    for (final fragment in fragments) {
-      final parts = fragment.split('=');
-      if (parts.length == 2 && parts[0] == 'access_token') {
-        _client.auth.getSessionFromUrl(Uri.base);
-        break;
-      }
     }
   }
 
@@ -136,7 +106,7 @@ class SupabaseClientService {
     required String tableName,
     required T Function(Map<String, dynamic>) fromJson,
     String? select,
-    List<Filter>? filters,
+    List<QueryFilter>? filters,
     List<Ordering>? orderBy,
     int? limit,
     int? offset,
@@ -150,19 +120,22 @@ class SupabaseClientService {
         }
       }
 
+      // Build the final query with transforms applied at the end
+      PostgrestTransformBuilder<PostgrestList> transformed = query;
+
       if (orderBy != null) {
-        query = query.order(orderBy.first.column, ascending: orderBy.first.ascending);
+        transformed = query.order(orderBy.first.column, ascending: orderBy.first.ascending);
       }
 
       if (limit != null) {
-        query = query.limit(limit);
+        transformed = transformed.limit(limit);
       }
 
       if (offset != null) {
-        query = query.range(offset, offset + (limit ?? 10) - 1);
+        transformed = transformed.range(offset, offset + (limit ?? 10) - 1);
       }
 
-      final data = await query;
+      final data = await transformed;
       return (data as List).map((item) => fromJson(item as Map<String, dynamic>)).toList();
     } on PostgrestException catch (e) {
       throw ServerException('Database query failed: ${e.message}');
@@ -175,7 +148,7 @@ class SupabaseClientService {
     required String tableName,
     required T Function(Map<String, dynamic>) fromJson,
     String? select,
-    List<Filter>? filters,
+    List<QueryFilter>? filters,
   }) async {
     try {
       var query = _client.from(tableName).select(select ?? '*');
@@ -187,7 +160,7 @@ class SupabaseClientService {
       }
 
       final data = await query.maybeSingle();
-      return data != null ? fromJson(data as Map<String, dynamic>) : null;
+      return data != null ? fromJson(data) : null;
     } on PostgrestException catch (e) {
       throw ServerException('Database query failed: ${e.message}');
     } catch (e) {
@@ -203,7 +176,7 @@ class SupabaseClientService {
   }) async {
     try {
       final response = await _client.from(tableName).insert(data).select(select ?? '*').single();
-      return fromJson(response as Map<String, dynamic>);
+      return fromJson(response);
     } on PostgrestException catch (e) {
       throw ServerException('Insert operation failed: ${e.message}');
     } catch (e) {
@@ -225,7 +198,7 @@ class SupabaseClientService {
           .eq('id', id)
           .select(select ?? '*')
           .single();
-      return fromJson(response as Map<String, dynamic>);
+      return fromJson(response);
     } on PostgrestException catch (e) {
       throw ServerException('Update operation failed: ${e.message}');
     } catch (e) {
@@ -250,7 +223,7 @@ class SupabaseClientService {
   RealtimeChannel subscribeToTable({
     required String tableName,
     required String channelId,
-    required Function(RealtimePayload) callback,
+    required void Function(PostgresChangePayload payload) callback,
   }) {
     return _client.channel(channelId).onPostgresChanges(
       event: PostgresChangeEvent.all,
@@ -261,56 +234,33 @@ class SupabaseClientService {
   }
 
   // Storage methods
-  Future<String> uploadFile({
+  Future<String> uploadFileBytes({
     required String bucket,
     required String path,
-    required File file,
-    Map<String, String>? metadata,
-  }) async {
-    try {
-      final fileBytes = await file.readAsBytes();
-      final response = await _client.storage
-          .from(bucket)
-          .uploadBinary(path, fileBytes, fileOptions: FileOptions(metadata: metadata));
-      return response;
-    } on StorageException catch (e) {
-      throw StorageException('Failed to upload file: ${e.message}', path);
-    } catch (e) {
-      throw StorageException('Failed to upload file: ${e.toString()}', path);
-    }
-  }
-
-  Future<String> uploadFileWeb({
-    required String bucket,
-    required String path,
-    required List<int> bytes,
+    required Uint8List bytes,
     String? contentType,
-    Map<String, String>? metadata,
   }) async {
     try {
       final response = await _client.storage
           .from(bucket)
-          .uploadBinary(path, bytes, fileOptions: FileOptions(
-        contentType: contentType,
-        metadata: metadata,
-      ));
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType),
+          );
       return response;
     } on StorageException catch (e) {
-      throw StorageException('Failed to upload file: ${e.message}', path);
+      throw AppStorageException('Failed to upload file: ${e.message}', path);
     } catch (e) {
-      throw StorageException('Failed to upload file: ${e.toString()}', path);
+      throw AppStorageException('Failed to upload file: ${e.toString()}', path);
     }
   }
 
-  Future<String> getPublicUrl({
+  String getPublicUrl({
     required String bucket,
     required String path,
-  }) async {
-    try {
-      return _client.storage.from(bucket).getPublicUrl(path);
-    } catch (e) {
-      throw StorageException('Failed to get public URL: ${e.toString()}', path);
-    }
+  }) {
+    return _client.storage.from(bucket).getPublicUrl(path);
   }
 
   Future<void> deleteFile({
@@ -319,8 +269,10 @@ class SupabaseClientService {
   }) async {
     try {
       await _client.storage.from(bucket).remove([path]);
+    } on StorageException catch (e) {
+      throw AppStorageException('Failed to delete file: ${e.message}', path);
     } catch (e) {
-      throw StorageException('Failed to delete file: ${e.toString()}', path);
+      throw AppStorageException('Failed to delete file: ${e.toString()}', path);
     }
   }
 
@@ -334,8 +286,10 @@ class SupabaseClientService {
   Future<bool> isTokenValid() async {
     try {
       final session = _client.auth.currentSession;
-      return session?.expiresAt != null && 
-             DateTime.now().isBefore(DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000));
+      return session?.expiresAt != null &&
+             DateTime.now().isBefore(
+               DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000),
+             );
     } catch (e) {
       return false;
     }
@@ -346,8 +300,8 @@ class SupabaseClientService {
   }
 }
 
-class Filter {
-  const Filter(this.column, this.operator, this.value);
+class QueryFilter {
+  const QueryFilter(this.column, this.operator, this.value);
 
   final String column;
   final String operator;
