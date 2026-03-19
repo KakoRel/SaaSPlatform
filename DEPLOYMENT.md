@@ -103,17 +103,17 @@ sudo ufw status
 
 ```bash
 # Создайте директорию для проекта
-sudo mkdir -p /opt/saas-platform
-sudo chown $USER:$USER /opt/saas-platform
+sudo mkdir -p /opt/SaaSPlatform
+sudo chown $USER:$USER /opt/SaaSPlatform
 
 # Перейдите в директорию
-cd /opt/saas-platform
+cd /opt/SaaSPlatform
 
 # Клонируйте репозиторий
-git clone https://github.com/ваш-username/saas-platform.git .
+git clone https://github.com/KakoRel/SaaSPlatform.git .
 
 # Или если используете SSH ключ
-git clone git@github.com:ваш-username/saas-platform.git .
+git clone git@github.com:Kakorel/SaaSPlatform.git .
 ```
 
 ---
@@ -164,7 +164,7 @@ static const String supabaseAnonKey = 'ваш-anon-key';
 
 ```bash
 # Перейдите в директорию проекта
-cd /opt/saas-platform
+cd /opt/SaaSPlatform
 
 # Сделайте скрипт деплоя исполняемым
 chmod +x deploy.sh
@@ -264,7 +264,7 @@ services:
 sudo crontab -e
 
 # Добавьте строку (обновление каждый день в 3:00)
-0 3 * * * certbot renew --quiet && docker compose -f /opt/saas-platform/docker-compose.yml restart
+0 3 * * * certbot renew --quiet && docker compose -f /opt/SaaSPlatform/docker-compose.yml restart
 ```
 
 ---
@@ -287,14 +287,14 @@ docker compose logs --tail=100 web
 ### Перезапуск приложения
 
 ```bash
-cd /opt/saas-platform
+cd /opt/SaaSPlatform
 docker compose restart
 ```
 
 ### Обновление приложения
 
 ```bash
-cd /opt/saas-platform
+cd /opt/SaaSPlatform
 git pull origin main
 sudo ./deploy.sh
 ```
@@ -329,7 +329,7 @@ mkdir -p /opt/backups
 # Settings -> Database -> Backups
 
 # Бэкап файлов приложения
-tar -czf /opt/backups/saas-platform-$(date +%Y%m%d).tar.gz /opt/saas-platform
+tar -czf /opt/backups/SaaSPlatform-$(date +%Y%m%d).tar.gz /opt/SaaSPlatform
 ```
 
 ### Автоматический бэкап (cron)
@@ -345,9 +345,9 @@ nano /opt/backup.sh
 #!/bin/bash
 BACKUP_DIR="/opt/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
-tar -czf $BACKUP_DIR/saas-platform-$DATE.tar.gz /opt/saas-platform
+tar -czf $BACKUP_DIR/SaaSPlatform-$DATE.tar.gz /opt/SaaSPlatform
 # Удалить бэкапы старше 7 дней
-find $BACKUP_DIR -name "saas-platform-*.tar.gz" -mtime +7 -delete
+find $BACKUP_DIR -name "SaaSPlatform-*.tar.gz" -mtime +7 -delete
 ```
 
 ```bash
