@@ -227,8 +227,19 @@ CREATE TRIGGER handle_task_completion_trigger
     FOR EACH ROW EXECUTE FUNCTION public.handle_task_completion();
 
 -- ========================================
--- ROW LEVEL SECURITY (RLS)
+-- FUNCTIONS AND TRIGGERS
 -- ========================================
+
+-- Function to check project membership without recursion
+CREATE OR REPLACE FUNCTION public.is_project_member(p_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.project_members
+    WHERE project_id = p_id AND user_id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Enable RLS on all tables
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -251,13 +262,7 @@ CREATE POLICY "Users can update own profile"
 -- Projects policies
 CREATE POLICY "Project members can view projects"
     ON public.projects FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.project_members
-            WHERE project_members.project_id = projects.id
-            AND project_members.user_id = auth.uid()
-        )
-    );
+    USING (public.is_project_member(id));
 
 CREATE POLICY "Project owners can insert projects"
     ON public.projects FOR INSERT
@@ -282,13 +287,7 @@ CREATE POLICY "Project owners can delete projects"
 -- Project members policies
 CREATE POLICY "Project members can view project members"
     ON public.project_members FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.project_members pm
-            WHERE pm.project_id = project_members.project_id
-            AND pm.user_id = auth.uid()
-        )
-    );
+    USING (public.is_project_member(project_id));
 
 CREATE POLICY "Project owners and admins can insert project members"
     ON public.project_members FOR INSERT

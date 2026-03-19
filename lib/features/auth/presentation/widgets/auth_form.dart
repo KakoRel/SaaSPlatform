@@ -32,44 +32,39 @@ class _AuthFormState extends ConsumerState<AuthForm> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
-    try {
-      if (_isLogin) {
+    if (_isLogin) {
+      setState(() => _isLoading = true);
+      try {
         await ref.read(authNotifierProvider.notifier).signInWithEmail(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-      } else {
-        await ref.read(authNotifierProvider.notifier).signUpWithEmail(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          fullName: _nameController.text.trim(),
-        );
-        
+      } catch (e) {
         if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => EmailConfirmationScreen(
-                email: _emailController.text.trim(),
-              ),
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка: ${e.toString()}'),
+              backgroundColor: Colors.red,
             ),
           );
         }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: ${e.toString()}'),
-            backgroundColor: Colors.red,
+    } else {
+      // For registration, navigate immediately to confirmation screen
+      // The actual signup will be performed there to avoid "loading" on this page
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EmailConfirmationScreen(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+            fullName: _nameController.text.trim(),
           ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+        ),
+      );
     }
   }
 

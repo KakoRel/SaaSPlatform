@@ -163,8 +163,11 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
     required String email,
     required String password,
     String? fullName,
+    bool showLoading = true,
   }) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    if (showLoading) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
 
     try {
       await _supabaseService.signUpWithEmail(
