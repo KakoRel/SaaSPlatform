@@ -151,7 +151,7 @@ supabase db push
 
 ```bash
 # Создайте файл с переменными окружения
-nano /opt/saas-platform/lib/core/constants/app_constants.dart
+nano /opt/SaaSPlatform/lib/core/constants/app_constants.dart
 
 # Замените значения:
 static const String supabaseUrl = 'https://ваш-проект.supabase.co';
