@@ -31,33 +31,15 @@ class MyApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-      home: authState.when(
-        data: (state) {
-          if (state.isLoading) {
-            return const Scaffold(
+      home: authState.isLoading
+          ? const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
               ),
-            );
-          }
-          
-          if (state.user == null) {
-            return const LoginPage();
-          }
-          
-          return const KanbanBoardWidget();
-        },
-        loading: () => const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-        error: (error, stack) => Scaffold(
-          body: Center(
-            child: Text('Error: $error'),
-          ),
-        ),
-      ),
+            )
+          : authState.user == null
+              ? const LoginPage()
+              : const KanbanBoardWidget(projectId: 'demo-project'),
     );
   }
 }
@@ -104,8 +86,8 @@ class LoginPage extends ConsumerWidget {
                 onPressed: () async {
                   try {
                     await ref.read(authNotifierProvider.notifier).signInWithEmail(
-                      'demo@taskflow.com',
-                      'password123',
+                      email: 'demo@taskflow.com',
+                      password: 'password123',
                     );
                   } catch (e) {
                     if (context.mounted) {
