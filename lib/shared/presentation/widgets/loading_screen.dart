@@ -12,12 +12,13 @@ class _LoadingScreenState extends State<LoadingScreen>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
+  late Animation<double> _progressAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     );
 
@@ -34,7 +35,15 @@ class _LoadingScreenState extends State<LoadingScreen>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeInOut,
+      curve: const Interval(0.0, 0.5, curve: Curves.easeInOut),
+    ));
+
+    _progressAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
     ));
 
     _controller.forward();
@@ -101,11 +110,17 @@ class _LoadingScreenState extends State<LoadingScreen>
                     const SizedBox(height: 48),
                     SizedBox(
                       width: 200,
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.blue[100],
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.blue[600]!,
-                        ),
+                      child: AnimatedBuilder(
+                        animation: _progressAnimation,
+                        builder: (context, child) {
+                          return LinearProgressIndicator(
+                            backgroundColor: Colors.blue[100],
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.blue[600]!,
+                            ),
+                            value: _progressAnimation.value,
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 16),

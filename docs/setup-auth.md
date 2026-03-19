@@ -71,10 +71,40 @@ CREATE TRIGGER on_auth_user_created
 
 В настройках проекта Supabase:
 1. Перейдите в Authentication → Settings
-2. В разделе **Site URL** добавьте: `http://localhost:3000`
+2. В разделе **Site URL** добавьте URL вашего приложения:
+
+   **Для локальной разработки:**
+   ```
+   http://localhost:3000
+   ```
+
+   **Для веб-сервера (замените на ваш домен):**
+   ```
+   https://your-domain.com
+   ```
+   или
+   ```
+   http://your-server-ip:port
+   ```
+
 3. В разделе **Redirect URLs** добавьте:
-   - `http://localhost:3000/auth/callback`
-   - `http://localhost:3000/**` (для всех остальных редиректов)
+
+   **Для локальной разработки:**
+   ```
+   http://localhost:3000/auth/callback
+   http://localhost:3000/**
+   ```
+
+   **Для веб-сервера:**
+   ```
+   https://your-domain.com/auth/callback
+   https://your-domain.com/**
+   ```
+   или
+   ```
+   http://your-server-ip:port/auth/callback
+   http://your-server-ip:port/**
+   ```
 4. Настройте Email templates для подтверждения регистрации
 
 **Subject (Тема письма):**
@@ -174,7 +204,7 @@ CREATE TRIGGER on_auth_user_created
 
 5. Убедитесь, что включена опция подтверждения email (если она есть в вашей версии Supabase)
 
-**Важно**: Убедитесь, что redirect URL в настройках Supabase совпадает с тем, что указан в коде (`http://localhost:3000/auth/callback`).
+**Важно**: Убедитесь, что redirect URL в настройках Supabase совпадает с URL вашего приложения. Если вы тестируете на сервере, используйте реальный домен или IP-адрес сервера вместо `localhost:3000`.
 
 ## 5. Использование приложения
 
