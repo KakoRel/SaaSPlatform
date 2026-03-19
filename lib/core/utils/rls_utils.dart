@@ -30,7 +30,15 @@ enum ProjectRole {
 class RLSUtils {
   RLSUtils._();
 
+  static bool isValidUUID(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
+  }
+
   static Future<ProjectRole?> getUserProjectRole(String projectId) async {
+    if (!isValidUUID(projectId)) return null;
+    
     try {
       final memberData = await SupabaseClientService.instance.fetchSingle<Map<String, dynamic>>(
         tableName: 'project_members',

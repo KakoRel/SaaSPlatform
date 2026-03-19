@@ -59,6 +59,18 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   Timer? _debounceTimer;
 
   Future<void> loadTasks(String projectId) async {
+    final isUuid = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(projectId);
+
+    if (!isUuid) {
+      state = state.copyWith(currentProjectId: projectId);
+      _activateDemoMode(
+        message: 'Используется демонстрационный режим. Подключите реальный проект, чтобы увидеть свои задачи.',
+      );
+      return;
+    }
+
     state = state.copyWith(
       isLoading: true,
       clearError: true,
