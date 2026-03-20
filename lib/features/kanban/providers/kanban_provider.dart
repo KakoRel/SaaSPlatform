@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -58,6 +58,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   final SupabaseClientService _supabaseService;
   RealtimeChannel? _tasksChannel;
   Timer? _debounceTimer;
+  Timer? _realtimeReloadDebounceTimer;
 
   Future<void> loadTasks(String projectId) async {
     final isUuid = RegExp(
@@ -155,8 +156,10 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Future<List<Task>> _fetchTasks(String projectId) async {
+    // Use the view so `Task.fromJson()` receives joined fields:
+    // assignee_name/assignee_email and creator_name/creator_email.
     final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
-      tableName: 'tasks',
+      tableName: 'project_tasks',
       fromJson: (json) => json,
       filters: [
         QueryFilter('project_id', 'eq', projectId),
@@ -164,7 +167,19 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       orderBy: [const Ordering('position', ascending: true)],
     );
 
-    return tasksData.map((data) => Task.fromJson(data)).toList();
+    final tasks = tasksData.map((data) => Task.fromJson(data)).toList();
+
+    assert(() {
+      final mismatched = tasks
+          .where((t) => t.assigneeId != null && t.assignee == null)
+          .length;
+      debugPrint(
+        'Kanban loadTasks($projectId): total=${tasks.length}, assigneeId!=null & assignee==null=$mismatched',
+      );
+      return true;
+    }());
+
+    return tasks;
   }
 
   void _setupRealtimeSubscription(String projectId) {
@@ -178,50 +193,17 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       tableName: 'tasks',
       channelId: 'tasks_$projectId',
       callback: (payload) {
-        _handleRealtimeEvent(payload);
+        // `payload.newRecord` comes from `tasks` table and doesn't include
+        // joined fields (assignee_name/email). So we debounce a full reload.
+        _realtimeReloadDebounceTimer?.cancel();
+        _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+          loadTasks(projectId);
+        });
       },
     );
 
     _tasksChannel?.subscribe();
     state = state.copyWith(isRealtimeConnected: true);
-  }
-
-  void _handleRealtimeEvent(PostgresChangePayload payload) {
-    if (state.isDemoData) {
-      return;
-    }
-
-    final eventType = payload.eventType;
-    final newRecord = payload.newRecord;
-    final oldRecord = payload.oldRecord;
-
-    // Deep copy the map of lists
-    final updated = <TaskStatus, List<Task>>{};
-    for (final entry in state.tasksByStatus.entries) {
-      updated[entry.key] = List<Task>.from(entry.value);
-    }
-
-    if (eventType == PostgresChangeEvent.insert && newRecord.isNotEmpty) {
-      final task = Task.fromJson(newRecord);
-      updated[task.status]?.add(task);
-      updated[task.status]?.sort((a, b) => a.position.compareTo(b.position));
-    } else if (eventType == PostgresChangeEvent.update && newRecord.isNotEmpty) {
-      final task = Task.fromJson(newRecord);
-      for (final status in TaskStatus.values) {
-        updated[status]?.removeWhere((t) => t.id == task.id);
-      }
-      updated[task.status]?.add(task);
-      updated[task.status]?.sort((a, b) => a.position.compareTo(b.position));
-    } else if (eventType == PostgresChangeEvent.delete && oldRecord.isNotEmpty) {
-      final taskId = oldRecord['id'] as String?;
-      if (taskId != null) {
-        for (final status in TaskStatus.values) {
-          updated[status]?.removeWhere((t) => t.id == taskId);
-        }
-      }
-    }
-
-    state = state.copyWith(tasksByStatus: updated);
   }
 
   Future<void> createTask({
@@ -482,6 +464,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   void dispose() {
     _tasksChannel?.unsubscribe();
     _debounceTimer?.cancel();
+    _realtimeReloadDebounceTimer?.cancel();
     super.dispose();
   }
 }
