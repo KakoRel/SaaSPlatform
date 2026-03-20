@@ -26,29 +26,29 @@ class SupabaseInitializationState {
   final String? error;
 }
 
-Future<void>? _initializationFuture;
+final supabaseInitializationProvider = Provider<SupabaseInitializationState>((ref) {
+  return const SupabaseInitializationState();
+});
 
-final supabaseInitializationProvider =
-    FutureProvider<SupabaseInitializationState>((ref) async {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   final supabaseService = SupabaseClientService.instance;
 
   try {
-    // Ensure initialize() runs only once.
-    _initializationFuture ??= supabaseService.initialize();
-    await _initializationFuture;
+    await supabaseService.initialize();
   } catch (_) {
-    // SupabaseClientService.initialize() stores initializationError internally.
+    // Initialization error is stored in the service; we'll show fallback UI
   }
 
-  return SupabaseInitializationState(
-    isInitialized: supabaseService.isInitialized,
-    error: supabaseService.initializationError,
-  );
-});
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(ProviderScope(overrides: [
+    supabaseInitializationProvider.overrideWithValue(
+      SupabaseInitializationState(
+        isInitialized: supabaseService.isInitialized,
+        error: supabaseService.initializationError,
+      ),
+    ),
+  ], child: const MyApp()));
 }
 
 class MyApp extends ConsumerWidget {
@@ -56,7 +56,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final initAsync = ref.watch(supabaseInitializationProvider);
+    final initState = ref.watch(supabaseInitializationProvider);
     final authState = ref.watch(authNotifierProvider);
     final selectedProject = ref.watch(selectedProjectProvider);
 
@@ -66,46 +66,41 @@ class MyApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-      home: _buildHome(initAsync, authState, selectedProject),
+      home: _buildHome(initState, authState, selectedProject, ref),
     );
   }
 
   Widget _buildHome(
-    AsyncValue<SupabaseInitializationState> initAsync,
+    SupabaseInitializationState initState,
     AppAuthState authState,
     Project? selectedProject,
+    WidgetRef ref,
   ) {
-    return initAsync.when(
-      loading: () => const LoadingScreen(),
-      error: (e, _) => _InitializationErrorScreen(error: e.toString()),
-      data: (initState) {
-        if (!initState.isInitialized) {
-          return _InitializationErrorScreen(error: initState.error);
-        }
+    if (!initState.isInitialized) {
+      return _InitializationErrorScreen(error: initState.error);
+    }
 
-        // After successful signup Supabase may clear session until email is confirmed.
-        // Show confirmation screen even if `authState.user` becomes null.
-        if (authState.pendingEmailConfirmationEmail != null) {
-          return EmailConfirmationScreen(
-            email: authState.pendingEmailConfirmationEmail!,
-          );
-        }
+    // After successful signup Supabase may clear session until email is confirmed.
+    // Show confirmation screen even if `authState.user` becomes null.
+    if (authState.pendingEmailConfirmationEmail != null) {
+      return EmailConfirmationScreen(
+        email: authState.pendingEmailConfirmationEmail!,
+      );
+    }
 
-        if (authState.isLoading) {
-          return const LoadingScreen();
-        }
+    if (authState.isLoading) {
+      return const LoadingScreen();
+    }
 
-        if (authState.user == null) {
-          return const AuthForm();
-        }
+    if (authState.user == null) {
+      return const AuthForm();
+    }
 
-        if (selectedProject == null) {
-          return const ProjectSelectionScreen();
-        }
+    if (selectedProject == null) {
+      return const ProjectSelectionScreen();
+    }
 
-        return KanbanBoardWrapper(selectedProject: selectedProject);
-      },
-    );
+    return KanbanBoardWrapper(selectedProject: selectedProject);
   }
 }
 
