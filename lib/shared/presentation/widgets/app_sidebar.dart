@@ -211,6 +211,7 @@ class AppSidebar extends ConsumerWidget {
   Future<void> _showCreateProjectDialog(BuildContext context, WidgetRef ref) async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
+    final projectsNotifier = ref.read(projectsProvider.notifier);
 
     return showDialog(
       context: context,
@@ -248,7 +249,7 @@ class AppSidebar extends ConsumerWidget {
           ElevatedButton(
             onPressed: () {
               if (nameController.text.isNotEmpty) {
-                ref.read(projectsProvider.notifier).createProject(
+                projectsNotifier.createProject(
                       nameController.text.trim(),
                       descController.text.trim().isEmpty ? null : descController.text.trim(),
                     );

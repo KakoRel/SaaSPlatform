@@ -263,15 +263,16 @@ class _KanbanColumn extends ConsumerWidget {
           
           // Tasks List
           Expanded(
-            child: DragTarget<Task>(
-              onWillAcceptWithDetails: (details) => details.data.status != status,
+            child: DragTarget<Map<String, dynamic>>(
+              onWillAcceptWithDetails: (details) => (details.data['task'] as Task).status != status,
               onAcceptWithDetails: (details) {
-                final task = details.data;
+                final task = details.data['task'] as Task;
+                final fromIndex = details.data['index'] as int;
                 ref.read(kanbanProvider.notifier).handleDragDrop(
                       taskId: task.id,
                       fromStatus: task.status,
                       toStatus: status,
-                      fromIndex: tasks.indexWhere((t) => t.id == task.id),
+                      fromIndex: fromIndex,
                       toIndex: tasks.length,
                     );
               },
@@ -300,7 +301,7 @@ class _KanbanColumn extends ConsumerWidget {
                           itemCount: tasks.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
-                            return _TaskCard(task: tasks[index], isDesktop: !isMobile);
+                            return _TaskCard(task: tasks[index], isDesktop: !isMobile, index: index);
                           },
                         ),
                 );
@@ -325,10 +326,12 @@ class _TaskCard extends ConsumerWidget {
   const _TaskCard({
     required this.task,
     required this.isDesktop,
+    required this.index,
   });
 
   final Task task;
   final bool isDesktop;
+  final int index;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -435,8 +438,8 @@ class _TaskCard extends ConsumerWidget {
       ),
     );
 
-    return Draggable<Task>(
-      data: task,
+    return Draggable<Map<String, dynamic>>(
+      data: {'task': task, 'index': index},
       feedback: Material(
         color: Colors.transparent,
         child: SizedBox(
@@ -546,7 +549,15 @@ class TaskDetailsSheet extends ConsumerWidget {
                     if (task.imageUrl != null) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.network(task.imageUrl!, fit: BoxFit.cover),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 300),
+                          child: Image.network(
+                            task.imageUrl!,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
                     ],

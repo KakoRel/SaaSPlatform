@@ -93,16 +93,34 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
   }
 
   Future<void> inviteMember(String projectId, String email) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final searchEmail = email.trim().toLowerCase();
+
     try {
-      // Find user by email
       final userData = await _supabaseService.fetchSingle<Map<String, dynamic>>(
         tableName: 'users',
+        select: 'id, email',
         fromJson: (json) => json,
-        filters: [QueryFilter('email', 'eq', email)],
+        filters: [QueryFilter('email', 'eq', searchEmail)],
       );
 
       if (userData == null) {
-        throw const ServerException('User with this email not found');
+        throw ServerException('Пользователь с email "$searchEmail" не найден в системе. '
+            'Убедитесь, что он уже зарегистрирован.');
+      }
+
+      // Check if already a member
+      final existingMember = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: 'project_members',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          QueryFilter('user_id', 'eq', userData['id']),
+        ],
+      );
+
+      if (existingMember != null) {
+        throw const ServerException('Этот пользователь уже является участником проекта');
       }
 
       await _supabaseService.insert<Map<String, dynamic>>(
@@ -114,8 +132,12 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
         },
         fromJson: (json) => json,
       );
+      state = state.copyWith(isLoading: false);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: e is ServerException ? e.message : e.toString(),
+      );
       rethrow;
     }
   }
