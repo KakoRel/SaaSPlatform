@@ -13,84 +13,40 @@ class AppSidebar extends ConsumerWidget {
     final selectedProject = ref.watch(selectedProjectProvider);
 
     return Drawer(
+      backgroundColor: Colors.blueGrey[900]?.withValues(alpha: 0.95),
       child: Column(
         children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.dashboard, color: Colors.white, size: 48),
-                  SizedBox(height: 8),
-                  Text(
-                    'TaskFlow',
-                    style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildSidebarHeader(context),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
-                const ListTile(
-                  title: Text(
-                    'PROJECTS',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                  ),
-                ),
+                const SizedBox(height: 20),
+                _buildSectionHeader('PROJECTS'),
                 ...projectsState.projects.map((project) {
                   final isSelected = project.id == selectedProject?.id;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      radius: 12,
-                      backgroundColor: isSelected ? Theme.of(context).primaryColor : Colors.grey[300],
-                      child: Text(
-                        project.name[0].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isSelected ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    title: Text(
-                      project.name,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Theme.of(context).primaryColor : null,
-                      ),
-                    ),
-                    onTap: () {
-                      projectsNotifier.selectProject(project.id);
-                      Navigator.pop(context); // Close drawer
-                    },
-                    selected: isSelected,
-                  );
+                  return _buildProjectItem(context, project, isSelected, projectsNotifier);
                 }),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.add),
-                  title: const Text('Add New Project'),
+                const SizedBox(height: 8),
+                _buildActionItem(
+                  context,
+                  icon: Icons.add_rounded,
+                  label: 'New Project',
                   onTap: () {
                     Navigator.pop(context);
                     _showCreateProjectDialog(context, ref);
                   },
                 ),
                 if (selectedProject != null) ...[
-                  const Divider(),
-                  const ListTile(
-                    title: Text(
-                      'SETTINGS',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                    ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(color: Colors.white10),
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.people_outline),
-                    title: const Text('Project Members'),
+                  _buildSectionHeader('SETTINGS'),
+                  _buildActionItem(
+                    context,
+                    icon: Icons.people_outline_rounded,
+                    label: 'Project Members',
                     onTap: () {
                       Navigator.pop(context);
                       showDialog(
@@ -103,23 +59,148 @@ class AppSidebar extends ConsumerWidget {
               ],
             ),
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings_outlined),
-            title: const Text('Settings'),
-            onTap: () {
-              // App settings
-            },
+          const Divider(color: Colors.white10, height: 1),
+          _buildFooter(context, ref),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarHeader(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20, bottom: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue[800]!, Colors.purple[800]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Column(
+          children: [
+            Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 40),
+            SizedBox(height: 12),
+            Text(
+              'TaskFlow',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: Colors.white38,
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProjectItem(
+    BuildContext context,
+    dynamic project,
+    bool isSelected,
+    ProjectsNotifier projectsNotifier,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        onTap: () {
+          projectsNotifier.selectProject(project.id);
+          Navigator.pop(context);
+        },
+        dense: true,
+        leading: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.blue[400] : Colors.white10,
+            borderRadius: BorderRadius.circular(8),
           ),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Logout', style: TextStyle(color: Colors.red)),
+          child: Center(
+            child: Text(
+              project.name[0].toUpperCase(),
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white60,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        title: Text(
+          project.name,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white70,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+        trailing: isSelected 
+            ? const Icon(Icons.check_circle_rounded, color: Colors.blue, size: 16)
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildActionItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = Colors.white70,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      dense: true,
+      leading: Icon(icon, color: color, size: 20),
+      title: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildActionItem(
+            context,
+            icon: Icons.settings_rounded,
+            label: 'System Settings',
+            onTap: () {},
+          ),
+          _buildActionItem(
+            context,
+            icon: Icons.logout_rounded,
+            label: 'Logout',
+            color: Colors.redAccent[100]!,
             onTap: () {
-              // Sign out logic
               // ref.read(authNotifierProvider.notifier).signOut();
             },
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -132,25 +213,35 @@ class AppSidebar extends ConsumerWidget {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New Project'),
+        backgroundColor: Colors.white.withValues(alpha: 0.95),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('New Project', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Project Name'),
+              decoration: InputDecoration(
+                labelText: 'Project Name',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               autofocus: true,
             ),
+            const SizedBox(height: 16),
             TextField(
               controller: descController,
-              decoration: const InputDecoration(labelText: 'Description (Optional)'),
+              decoration: InputDecoration(
+                labelText: 'Description (Optional)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              maxLines: 2,
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[700])),
           ),
           ElevatedButton(
             onPressed: () {
@@ -162,6 +253,11 @@ class AppSidebar extends ConsumerWidget {
                 Navigator.pop(context);
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[600],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             child: const Text('Create'),
           ),
         ],

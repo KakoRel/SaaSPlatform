@@ -79,19 +79,6 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
         fromJson: (json) => json,
       );
 
-      // After creating project, we need to add the owner to project_members
-      // In Supabase, this could be handled by a trigger, but let's be safe
-      // Actually, my migration.sql doesn't have a trigger for this, so I should do it manually
-      await _supabaseService.insert<Map<String, dynamic>>(
-        tableName: 'project_members',
-        data: {
-          'project_id': newProject['id'],
-          'user_id': userId,
-          'role': 'owner',
-        },
-        fromJson: (json) => json,
-      );
-
       final project = Project.fromJson(newProject);
       state = state.copyWith(
         projects: [project, ...state.projects],

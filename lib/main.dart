@@ -105,14 +105,23 @@ class KanbanBoardWrapper extends StatelessWidget {
       final kanbanState = ref.watch(kanbanProvider);
       
       return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
         drawer: const AppSidebar(),
         appBar: AppBar(
-          title: Text('${selectedProject.name} - Kanban'),
+          title: Text(
+            selectedProject.name.toUpperCase(),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1.2),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.blueGrey[900],
           actions: [
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(selectedProject.id),
             ),
+            const SizedBox(width: 8),
           ],
         ),
         body: Column(
@@ -120,30 +129,26 @@ class KanbanBoardWrapper extends StatelessWidget {
             if (kanbanState.isDemoData)
               Container(
                 width: double.infinity,
-                color: Colors.orange[50],
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  kanbanState.demoMessage ??
-                      'Демо-режим: подключите Supabase проект и добавьте себя в project_members, чтобы увидеть реальные данные.',
-                  style: const TextStyle(
-                    color: Colors.orange,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
+                decoration: BoxDecoration(
+                  color: Colors.amber[100],
+                  border: Border(bottom: BorderSide(color: Colors.amber[300]!, width: 1)),
                 ),
-              )
-            else if (kanbanState.error != null)
-              Container(
-                width: double.infinity,
-                color: Colors.red[50],
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  kanbanState.error!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        kanbanState.demoMessage ?? 'Demo Mode: See project_members setup instructions in fix_rls.sql.',
+                        style: TextStyle(
+                          color: Colors.amber[900],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             Expanded(

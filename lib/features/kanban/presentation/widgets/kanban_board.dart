@@ -191,8 +191,14 @@ class _KanbanColumn extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Card(
-      color: _getColumnColor(status).withAlpha(25),
+    final color = _getColumnColor(status);
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -200,38 +206,45 @@ class _KanbanColumn extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _getColumnColor(status).withAlpha(50),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
+              gradient: LinearGradient(
+                colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
-                Icon(
-                  _getStatusIcon(status),
-                  color: _getColumnColor(status),
-                  size: 20,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_getStatusIcon(status), color: color, size: 18),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _getStatusLabel(status),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: _getColumnColor(status),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _getStatusLabel(status),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: color.withValues(alpha: 0.9),
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getColumnColor(status),
-                    borderRadius: BorderRadius.circular(12),
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withValues(alpha: 0.2)),
                   ),
                   child: Text(
                     '${tasks.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: color,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -239,11 +252,10 @@ class _KanbanColumn extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  color: _getColumnColor(status),
+                  icon: const Icon(Icons.add_rounded, size: 22),
+                  color: color,
                   onPressed: () => _showAddTaskDialog(context, ref, status),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
@@ -259,46 +271,34 @@ class _KanbanColumn extends ConsumerWidget {
                       taskId: task.id,
                       fromStatus: task.status,
                       toStatus: status,
-                      fromIndex: tasks.indexWhere((t) => t.id == task.id), // This logic is simplified
+                      fromIndex: tasks.indexWhere((t) => t.id == task.id),
                       toIndex: tasks.length,
                     );
               },
               builder: (context, candidateData, rejectedData) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: candidateData.isNotEmpty
-                        ? _getColumnColor(status).withAlpha(30)
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                  ),
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  color: candidateData.isNotEmpty
+                      ? color.withValues(alpha: 0.1)
+                      : Colors.transparent,
                   child: tasks.isEmpty && candidateData.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.inbox_outlined,
-                                size: 48,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 8),
+                              Icon(Icons.layers_outlined, size: 48, color: color.withValues(alpha: 0.2)),
+                              const SizedBox(height: 12),
                               Text(
-                                'No tasks',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 14,
-                                ),
+                                'Empty Column',
+                                style: TextStyle(color: color.withValues(alpha: 0.3), fontSize: 13),
                               ),
                             ],
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(12),
                           itemCount: tasks.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             return _TaskCard(task: tasks[index], isDesktop: !isMobile);
                           },
@@ -332,63 +332,89 @@ class _TaskCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final card = Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: () => _showTaskDetails(context, ref, task),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: EdgeInsets.all(isDesktop ? 16 : 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+    final card = Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Task Title
-              Text(
-                task.title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              // Priority Bar
+              Container(
+                width: 5,
+                color: _getPriorityColor(task.priority),
               ),
-
-              if (task.description != null && task.description!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  task.description!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                  maxLines: isDesktop ? 3 : 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-
-              const SizedBox(height: 12),
-
-              // Bottom Row
-              Row(
-                children: [
-                  _PriorityChip(priority: task.priority),
-                  if (task.dueDate != null) ...[
-                    const SizedBox(width: 8),
-                    _DueDateChip(dueDate: task.dueDate!),
-                  ],
-                  const Spacer(),
-                  if (task.assignee != null)
-                    CircleAvatar(
-                      radius: isDesktop ? 14 : 10,
-                      backgroundColor: Theme.of(context).primaryColor.withAlpha(50),
-                      child: Text(
-                        (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: isDesktop ? 10 : 8,
-                          fontWeight: FontWeight.bold,
+              Expanded(
+                child: InkWell(
+                  onTap: () => _showTaskDetails(context, ref, task),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                task.title,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (task.assignee != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8.0),
+                                child: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: Colors.blue[50],
+                                  child: Text(
+                                    (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                      ),
+                        if (task.description != null && task.description!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            task.description!,
+                            style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.3),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _PriorityBadge(priority: task.priority),
+                            if (task.dueDate != null) ...[
+                              const SizedBox(width: 8),
+                              _DueDateBadge(dueDate: task.dueDate!),
+                            ],
+                          ],
+                        ),
+                      ],
                     ),
-                ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -398,15 +424,18 @@ class _TaskCard extends ConsumerWidget {
 
     return LongPressDraggable<Task>(
       data: task,
-      feedback: SizedBox(
-        width: 300,
-        child: Opacity(
-          opacity: 0.8,
-          child: card,
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: 280,
+          child: Opacity(
+            opacity: 0.9,
+            child: card,
+          ),
         ),
       ),
       childWhenDragging: Opacity(
-        opacity: 0.5,
+        opacity: 0.3,
         child: card,
       ),
       child: card,
@@ -420,6 +449,15 @@ class _TaskCard extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => TaskDetailsSheet(task: task),
     );
+  }
+
+  Color _getPriorityColor(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low: return Colors.green;
+      case TaskPriority.medium: return Colors.blue;
+      case TaskPriority.high: return Colors.orange;
+      case TaskPriority.urgent: return Colors.red;
+    }
   }
 }
 
@@ -513,7 +551,7 @@ class TaskDetailsSheet extends ConsumerWidget {
                                 style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                               ),
                               const SizedBox(height: 8),
-                              _PriorityChip(priority: task.priority),
+                              _PriorityBadge(priority: task.priority),
                             ],
                           ),
                         ),
@@ -630,9 +668,9 @@ class TaskDetailsSheet extends ConsumerWidget {
   }
 }
 
-// Priority Chip Widget
-class _PriorityChip extends StatelessWidget {
-  const _PriorityChip({required this.priority});
+// Priority Badge Widget
+class _PriorityBadge extends StatelessWidget {
+  const _PriorityBadge({required this.priority});
 
   final TaskPriority priority;
 
@@ -648,9 +686,9 @@ class _PriorityChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withAlpha(50),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withAlpha(127)),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(
         priority.name.toUpperCase(),
@@ -658,22 +696,23 @@ class _PriorityChip extends StatelessWidget {
           color: color,
           fontSize: 10,
           fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
         ),
       ),
     );
   }
 }
 
-// Due Date Chip Widget
-class _DueDateChip extends StatelessWidget {
-  const _DueDateChip({required this.dueDate});
+// Due Date Badge Widget
+class _DueDateBadge extends StatelessWidget {
+  const _DueDateBadge({required this.dueDate});
 
   final DateTime dueDate;
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final isOverdue = dueDate.isBefore(now);
+    final isOverdue = dueDate.isBefore(DateTime(now.year, now.month, now.day));
     final isToday = dueDate.day == now.day && dueDate.month == now.month && dueDate.year == now.year;
     
     Color color;
@@ -686,25 +725,21 @@ class _DueDateChip extends StatelessWidget {
       color = Colors.orange;
       text = 'Today';
     } else {
-      color = Colors.grey;
+      color = Colors.blueGrey;
       text = '${dueDate.day}/${dueDate.month}';
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withAlpha(50),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withAlpha(127)),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.schedule,
-            size: 12,
-            color: color,
-          ),
+          Icon(Icons.calendar_today_rounded, size: 10, color: color),
           const SizedBox(width: 4),
           Text(
             text,
