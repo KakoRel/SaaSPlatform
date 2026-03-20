@@ -108,6 +108,13 @@ class Task {
   final TaskMember? creator;
 
   factory Task.fromJson(Map<String, dynamic> json) {
+    final assigneeIdRaw = json['assignee_id'] as String?;
+    final assigneeName = json['assignee_name'] as String?;
+    final assigneeEmail = json['assignee_email'] as String?;
+
+    final creatorName = json['creator_name'] as String?;
+    final creatorEmail = json['creator_email'] as String?;
+
     return Task(
       id: json['id'] as String,
       projectId: json['project_id'] as String,
@@ -123,18 +130,24 @@ class Task {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       imageUrl: json['image_url'] as String?,
-      assignee: json['assignee_name'] != null
+      // Assignee may have `full_name` == null, but `email` can still be present.
+      // Поэтому создаём TaskMember если есть хотя бы email.
+      assignee: (assigneeIdRaw != null &&
+              (assigneeName != null ||
+                  (assigneeEmail != null && assigneeEmail.isNotEmpty)))
           ? TaskMember(
-              id: json['assignee_id'] as String,
-              email: json['assignee_email'] as String? ?? '',
-              fullName: json['assignee_name'] as String?,
+              id: assigneeIdRaw,
+              email: assigneeEmail ?? '',
+              fullName: assigneeName,
             )
           : null,
-      creator: json['creator_name'] != null
+      creator: json['creator_id'] != null &&
+              (creatorName != null ||
+                  (creatorEmail != null && creatorEmail.isNotEmpty))
           ? TaskMember(
               id: json['creator_id'] as String,
-              email: json['creator_email'] as String? ?? '',
-              fullName: json['creator_name'] as String?,
+              email: creatorEmail ?? '',
+              fullName: creatorName,
             )
           : null,
     );
