@@ -20,7 +20,7 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
     final notifier = ref.read(projectsProvider.notifier);
 
     return AlertDialog(
-      title: const Text('Project Members'),
+      title: const Text('Участники Проекта'),
       content: SizedBox(
         width: double.maxFinite,
         child: Column(
@@ -33,7 +33,7 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
                   child: TextField(
                     controller: _emailController,
                     decoration: const InputDecoration(
-                      labelText: 'Invite by email',
+                      labelText: 'Пригласить по почте',
                       hintText: 'user@example.com',
                     ),
                   ),
@@ -60,7 +60,7 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
+                    return Text('Ошибка: ${snapshot.error}');
                   }
                   final members = snapshot.data ?? [];
                   return ListView.builder(
@@ -102,7 +102,7 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: const Text('Закрыть'),
         ),
       ],
     );
@@ -118,7 +118,7 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
       _emailController.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Member invited successfully')),
+          const SnackBar(content: Text('Участник успешно приглашен')),
         );
         setState(() {}); // Refresh list
       }

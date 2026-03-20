@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -229,6 +230,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? assigneeId,
     TaskPriority priority = TaskPriority.medium,
     DateTime? dueDate,
+    String? imageUrl,
   }) async {
     if (state.currentProjectId == null) return;
 
@@ -243,6 +245,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
           'creator_id': _supabaseService.currentUserId!,
           'priority': priority.name,
           'due_date': dueDate?.toIso8601String(),
+          'image_url': imageUrl,
           'position': _getNextPosition(TaskStatus.todo),
         },
         fromJson: (json) => json,
@@ -280,6 +283,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     TaskPriority? priority,
     DateTime? dueDate,
     TaskStatus? status,
+    String? imageUrl,
   }) async {
     try {
       final updateData = <String, dynamic>{};
@@ -289,6 +293,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       if (priority != null) updateData['priority'] = priority.name;
       if (dueDate != null) updateData['due_date'] = dueDate.toIso8601String();
       if (status != null) updateData['status'] = status.toDbValue();
+      if (imageUrl != null) updateData['image_url'] = imageUrl;
 
       await _supabaseService.update<Map<String, dynamic>>(
         tableName: 'tasks',
@@ -298,6 +303,24 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<String?> uploadTaskImage(String taskId, List<int> bytes, String extension) async {
+    try {
+      final fileName = '${taskId}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final path = 'attachments/$fileName';
+      
+      await _supabaseService.uploadFileBytes(
+        bucket: 'task-attachments',
+        path: path,
+        bytes: bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+      );
+      
+      return _supabaseService.getPublicUrl(bucket: 'task-attachments', path: path);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
     }
   }
 

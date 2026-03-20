@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../features/projects/providers/projects_provider.dart';
 import '../../../features/projects/presentation/widgets/project_members_dialog.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 
 class AppSidebar extends ConsumerWidget {
   const AppSidebar({super.key});
@@ -22,7 +23,7 @@ class AppSidebar extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               children: [
                 const SizedBox(height: 20),
-                _buildSectionHeader('PROJECTS'),
+                _buildSectionHeader('ПРОЕКТЫ'),
                 ...projectsState.projects.map((project) {
                   final isSelected = project.id == selectedProject?.id;
                   return _buildProjectItem(context, project, isSelected, projectsNotifier);
@@ -31,7 +32,7 @@ class AppSidebar extends ConsumerWidget {
                 _buildActionItem(
                   context,
                   icon: Icons.add_rounded,
-                  label: 'New Project',
+                  label: 'Новый Проект',
                   onTap: () {
                     Navigator.pop(context);
                     _showCreateProjectDialog(context, ref);
@@ -42,11 +43,11 @@ class AppSidebar extends ConsumerWidget {
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Divider(color: Colors.white10),
                   ),
-                  _buildSectionHeader('SETTINGS'),
+                  _buildSectionHeader('НАСТРОЙКИ'),
                   _buildActionItem(
                     context,
                     icon: Icons.people_outline_rounded,
-                    label: 'Project Members',
+                    label: 'Участники Проекта',
                     onTap: () {
                       Navigator.pop(context);
                       showDialog(
@@ -189,16 +190,17 @@ class AppSidebar extends ConsumerWidget {
           _buildActionItem(
             context,
             icon: Icons.settings_rounded,
-            label: 'System Settings',
+            label: 'Настройки Системы',
             onTap: () {},
           ),
           _buildActionItem(
             context,
             icon: Icons.logout_rounded,
-            label: 'Logout',
+            label: 'Выйти',
             color: Colors.redAccent[100]!,
             onTap: () {
-              // ref.read(authNotifierProvider.notifier).signOut();
+              Navigator.pop(context); // Close drawer
+              ref.read(authNotifierProvider.notifier).signOut();
             },
           ),
         ],
@@ -215,14 +217,14 @@ class AppSidebar extends ConsumerWidget {
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white.withValues(alpha: 0.95),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('New Project', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Новый Проект', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: 'Project Name',
+                labelText: 'Название проекта',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               autofocus: true,
@@ -231,7 +233,7 @@ class AppSidebar extends ConsumerWidget {
             TextField(
               controller: descController,
               decoration: InputDecoration(
-                labelText: 'Description (Optional)',
+                labelText: 'Описание (необязательно)',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               maxLines: 2,
@@ -241,7 +243,7 @@ class AppSidebar extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[700])),
+            child: Text('Отмена', style: TextStyle(color: Colors.grey[700])),
           ),
           ElevatedButton(
             onPressed: () {
@@ -258,7 +260,7 @@ class AppSidebar extends ConsumerWidget {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Create'),
+            child: const Text('Создать'),
           ),
         ],
       ),

@@ -27,7 +27,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
-          'My Projects',
+          'Мои Проекты',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.white),
         ),
         backgroundColor: Colors.transparent,
@@ -35,7 +35,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.white, size: 28),
-            tooltip: 'Create Project',
+            tooltip: 'Создать Проект',
             onPressed: () => _showCreateProjectDialog(context, ref),
           ),
           const SizedBox(width: 8),
@@ -56,7 +56,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         child: state.isLoading
             ? const Center(child: CircularProgressIndicator(color: Colors.white))
             : state.error != null
-                ? Center(child: Text('Error: ${state.error}', style: const TextStyle(color: Colors.white)))
+                ? Center(child: Text('Ошибка: ${state.error}', style: const TextStyle(color: Colors.white)))
                 : state.projects.isEmpty
                     ? _buildEmptyState(context, ref)
                     : _buildProjectGrid(context, ref, state.projects),
@@ -70,21 +70,22 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.rocket_launch_outlined, size: 80, color: Colors.white.withValues(alpha: 0.8)),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           const Text(
-            'Welcome to TaskFlow',
+            'Добро пожаловать!',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 8),
           Text(
-            'Create your first project to start organizing.',
+            'Создайте свой первый проект, чтобы начать работу.',
             style: TextStyle(fontSize: 16, color: Colors.white.withValues(alpha: 0.7)),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () => _showCreateProjectDialog(context, ref),
             icon: const Icon(Icons.add),
-            label: const Text('Create New Project'),
+            label: const Text('Создать Новый Проект'),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               backgroundColor: Colors.white,
@@ -119,20 +120,22 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
   Future<void> _showCreateProjectDialog(BuildContext context, WidgetRef ref) async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
+    // Capture notifier before async gaps or potential disposal
+    final projectsNotifier = ref.read(projectsProvider.notifier);
 
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white.withValues(alpha: 0.9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('New Project', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Новый Проект', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: 'Project Name',
+                labelText: 'Название проекта',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               autofocus: true,
@@ -141,7 +144,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
             TextField(
               controller: descController,
               decoration: InputDecoration(
-                labelText: 'Description (Optional)',
+                labelText: 'Описание (необязательно)',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               maxLines: 2,
@@ -151,12 +154,13 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[700])),
+            child: Text('Отмена', style: TextStyle(color: Colors.grey[700])),
           ),
           ElevatedButton(
             onPressed: () {
               if (nameController.text.isNotEmpty) {
-                ref.read(projectsProvider.notifier).createProject(
+                // Use captured notifier
+                projectsNotifier.createProject(
                       nameController.text.trim(),
                       descController.text.trim().isEmpty ? null : descController.text.trim(),
                     );
@@ -168,7 +172,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Create'),
+            child: const Text('Создать'),
           ),
         ],
       ),

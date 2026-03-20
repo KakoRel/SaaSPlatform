@@ -83,6 +83,7 @@ class Task {
     this.dueDate,
     this.completedAt,
     this.position = 0,
+    this.imageUrl,
     required this.createdAt,
     required this.updatedAt,
     this.assignee,
@@ -100,6 +101,7 @@ class Task {
   final DateTime? dueDate;
   final DateTime? completedAt;
   final int position;
+  final String? imageUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
   final TaskMember? assignee;
@@ -120,6 +122,7 @@ class Task {
       position: json['position'] as int? ?? 0,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      imageUrl: json['image_url'] as String?,
       assignee: json['assignee_name'] != null
           ? TaskMember(
               id: json['assignee_id'] as String,
@@ -150,6 +153,7 @@ class Task {
       'due_date': dueDate?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'position': position,
+      'image_url': imageUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -167,6 +171,7 @@ class Task {
     DateTime? dueDate,
     DateTime? completedAt,
     int? position,
+    String? imageUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
     TaskMember? assignee,
@@ -184,6 +189,7 @@ class Task {
       dueDate: dueDate ?? this.dueDate,
       completedAt: completedAt ?? this.completedAt,
       position: position ?? this.position,
+      imageUrl: imageUrl ?? this.imageUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       assignee: assignee ?? this.assignee,

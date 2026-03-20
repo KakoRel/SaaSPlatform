@@ -54,7 +54,7 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Error loading tasks',
+              'Ошибка загрузки задач',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
@@ -66,7 +66,7 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => kanbanNotifier.loadTasks(widget.projectId),
-              child: const Text('Retry'),
+              child: const Text('Повторить'),
             ),
           ],
         ),
@@ -289,7 +289,7 @@ class _KanbanColumn extends ConsumerWidget {
                               Icon(Icons.layers_outlined, size: 48, color: color.withValues(alpha: 0.2)),
                               const SizedBox(height: 12),
                               Text(
-                                'Empty Column',
+                                'Пустая колонка',
                                 style: TextStyle(color: color.withValues(alpha: 0.3), fontSize: 13),
                               ),
                             ],
@@ -359,11 +359,22 @@ class _TaskCard extends ConsumerWidget {
               Expanded(
                 child: InkWell(
                   onTap: () => _showTaskDetails(context, ref, task),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (task.imageUrl != null)
+                        Image.network(
+                          task.imageUrl!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                         Row(
                           children: [
                             Expanded(
@@ -411,8 +422,10 @@ class _TaskCard extends ConsumerWidget {
                             ],
                           ],
                         ),
-                      ],
-                    ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -422,12 +435,12 @@ class _TaskCard extends ConsumerWidget {
       ),
     );
 
-    return LongPressDraggable<Task>(
+    return Draggable<Task>(
       data: task,
       feedback: Material(
         color: Colors.transparent,
         child: SizedBox(
-          width: 280,
+          width: isDesktop ? 280 : MediaQuery.of(context).size.width * 0.8,
           child: Opacity(
             opacity: 0.9,
             child: card,
@@ -530,9 +543,17 @@ class TaskDetailsSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
 
+                    if (task.imageUrl != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(task.imageUrl!, fit: BoxFit.cover),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
                     if (task.description != null && task.description!.isNotEmpty) ...[
                       Text(
-                        'Description',
+                        'Описание',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
@@ -547,7 +568,7 @@ class TaskDetailsSheet extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Priority',
+                                'Приоритет',
                                 style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                               ),
                               const SizedBox(height: 8),
@@ -560,7 +581,7 @@ class TaskDetailsSheet extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Status',
+                                'Статус',
                                 style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                               ),
                               const SizedBox(height: 8),
@@ -588,7 +609,7 @@ class TaskDetailsSheet extends ConsumerWidget {
                     if (task.dueDate != null) ...[
                       const SizedBox(height: 24),
                       Text(
-                        'Deadline',
+                        'Крайний срок',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
@@ -604,7 +625,7 @@ class TaskDetailsSheet extends ConsumerWidget {
                     if (task.assignee != null) ...[
                       const SizedBox(height: 24),
                       Text(
-                        'Assignee',
+                        'Исполнитель',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
@@ -646,12 +667,12 @@ class TaskDetailsSheet extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Task'),
-        content: const Text('Are you sure you want to delete this task?'),
+        title: const Text('Удалить задачу'),
+        content: const Text('Вы уверены, что хотите удалить эту задачу?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Отмена'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -660,7 +681,7 @@ class TaskDetailsSheet extends ConsumerWidget {
               Navigator.pop(context); // Close confirm dialog
               Navigator.pop(context); // Close bottom sheet
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Удалить', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
