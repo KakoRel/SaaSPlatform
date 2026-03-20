@@ -61,7 +61,9 @@ class _EmailConfirmationScreenState
     });
 
     try {
-      await ref.read(authNotifierProvider.notifier).resetPassword(widget.email);
+      await ref
+          .read(authNotifierProvider.notifier)
+          .resendConfirmationEmail(widget.email);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -68,9 +68,11 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
                     itemCount: members.length,
                     itemBuilder: (context, index) {
                       final member = members[index];
-                      final userData = member['users'] as Map<String, dynamic>?;
-                      final email = userData?['email'] as String? ?? 'Unknown';
-                      final name = userData?['full_name'] as String? ?? email;
+                      // Supabase nested select key can differ depending on relationship naming.
+                      final dynamic userDataRaw = member['users'] ?? member['user'];
+                      final userData = userDataRaw is Map<String, dynamic> ? userDataRaw : null;
+                      final email = userData?['email'] as String? ?? member['email'] as String? ?? 'Unknown';
+                      final name = userData?['full_name'] as String? ?? member['full_name'] as String? ?? email;
                       final role = member['role'] as String? ?? 'member';
 
                       return ListTile(

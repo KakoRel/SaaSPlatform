@@ -75,3 +75,25 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.find_user_id_by_email_for_project(uuid, text) TO authenticated;
+
+-- ========================================
+-- Project members can view other members
+-- ========================================
+-- Public.users RLS по умолчанию позволяет читать только свой профиль.
+-- Для экрана участников нам нужно разрешить чтение профилей пользователей,
+-- которые состоят в хотя бы одном общем проекте с текущим пользователем.
+
+DROP POLICY IF EXISTS "Project members can view users in same projects" ON public.users;
+
+CREATE POLICY "Project members can view users in same projects"
+  ON public.users FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.project_members pm_me
+      JOIN public.project_members pm_other
+        ON pm_other.project_id = pm_me.project_id
+      WHERE pm_me.user_id = auth.uid()
+        AND pm_other.user_id = users.id
+    )
+  );

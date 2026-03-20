@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
-import 'email_confirmation_screen.dart';
 
 class AuthForm extends ConsumerStatefulWidget {
   const AuthForm({super.key});
@@ -160,19 +159,8 @@ class _AuthFormState extends ConsumerState<AuthForm> {
           password: _passwordController.text,
           fullName: _nameController.text.trim(),
         );
-        
-        // After successful signup, show the confirmation screen
-        if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => EmailConfirmationScreen(
-                email: _emailController.text.trim(),
-                password: _passwordController.text,
-                fullName: _nameController.text.trim(),
-              ),
-            ),
-          );
-        }
+          // Do not navigate manually here.
+          // `main.dart` shows `EmailConfirmationScreen` based on auth state.
       } catch (e) {
         if (mounted) {
           // Check if it's a rate limit error

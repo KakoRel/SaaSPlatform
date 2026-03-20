@@ -463,7 +463,20 @@ WHERE pm.user_id = auth.uid();
 -- View for tasks with assignee and creator info
 CREATE OR REPLACE VIEW public.project_tasks AS
 SELECT 
-    t.*,
+    t.id,
+    t.project_id,
+    t.title,
+    t.description,
+    t.assignee_id,
+    t.creator_id,
+    t.status,
+    t.priority,
+    t.due_date,
+    t.completed_at,
+    t.position,
+    t.image_url,
+    t.created_at,
+    t.updated_at,
     assignee.full_name as assignee_name,
     assignee.email as assignee_email,
     creator.full_name as creator_name,

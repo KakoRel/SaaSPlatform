@@ -10,6 +10,7 @@ import 'features/projects/presentation/pages/project_selection_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/presentation/widgets/auth_form.dart';
+import 'features/auth/presentation/widgets/email_confirmation_screen.dart';
 import 'features/kanban/presentation/widgets/kanban_board.dart';
 import 'features/kanban/providers/kanban_provider.dart';
 import 'shared/presentation/widgets/loading_screen.dart';
@@ -77,6 +78,14 @@ class MyApp extends ConsumerWidget {
   ) {
     if (!initState.isInitialized) {
       return _InitializationErrorScreen(error: initState.error);
+    }
+
+    // After successful signup Supabase may clear session until email is confirmed.
+    // Show confirmation screen even if `authState.user` becomes null.
+    if (authState.pendingEmailConfirmationEmail != null) {
+      return EmailConfirmationScreen(
+        email: authState.pendingEmailConfirmationEmail!,
+      );
     }
 
     if (authState.isLoading) {

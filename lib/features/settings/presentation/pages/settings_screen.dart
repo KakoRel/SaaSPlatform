@@ -34,11 +34,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       maxHeight: 512,
       imageQuality: 75,
     );
-    
-    if (image != null) {
+
+    if (image == null) return;
+
+    try {
       final bytes = await image.readAsBytes();
       final ext = image.path.split('.').last;
       await ref.read(authNotifierProvider.notifier).uploadAvatar(bytes, ext);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Аватар обновлён')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось обновить аватар: $e')),
+        );
+      }
     }
   }
 
@@ -86,7 +100,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 width: 120,
                                 height: 120,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, _, __) => Text(
+                                errorBuilder: (context, error, stackTrace) => Text(
                                   initials,
                                   style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
                                 ),

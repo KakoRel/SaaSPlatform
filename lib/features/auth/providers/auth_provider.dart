@@ -15,12 +15,14 @@ class AppAuthState {
     this.isLoading = false,
     this.error,
     this.isAuthenticated = false,
+    this.pendingEmailConfirmationEmail,
   });
 
   final AppUser? user;
   final bool isLoading;
   final String? error;
   final bool isAuthenticated;
+  final String? pendingEmailConfirmationEmail;
 
   AppAuthState copyWith({
     AppUser? user,
@@ -29,12 +31,17 @@ class AppAuthState {
     bool? isAuthenticated,
     bool clearUser = false,
     bool clearError = false,
+    String? pendingEmailConfirmationEmail,
+    bool clearPendingEmailConfirmationEmail = false,
   }) {
     return AppAuthState(
       user: clearUser ? null : (user ?? this.user),
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      pendingEmailConfirmationEmail: clearPendingEmailConfirmationEmail
+          ? null
+          : (pendingEmailConfirmationEmail ?? this.pendingEmailConfirmationEmail),
     );
   }
 }
@@ -103,6 +110,7 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
           isAuthenticated: true,
           isLoading: false,
           clearError: true,
+          clearPendingEmailConfirmationEmail: true,
         );
       }).catchError((error) {
         state = state.copyWith(
@@ -184,6 +192,12 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
       if (showLoading) {
         state = state.copyWith(isLoading: false);
       }
+
+      // Supabase creates the user but requires email confirmation.
+      // Even if session is not available yet, keep the UI on a confirmation screen.
+      state = state.copyWith(
+        pendingEmailConfirmationEmail: email.trim(),
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -275,12 +289,14 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
     }
   }
 
-  Future<void> resendConfirmationEmail() async {
+  Future<void> resendConfirmationEmail([String? email]) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final email = state.user?.email;
-      if (email == null) throw const AuthenticationException('Email not found');
-      await _supabaseService.resendConfirmationEmail(email);
+      final targetEmail = email ?? state.user?.email;
+      if (targetEmail == null) {
+        throw const AuthenticationException('Email not found');
+      }
+      await _supabaseService.resendConfirmationEmail(targetEmail);
       state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
