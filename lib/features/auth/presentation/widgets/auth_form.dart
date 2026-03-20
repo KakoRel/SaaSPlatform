@@ -103,7 +103,9 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                   navigator.pop();
                   messenger.showSnackBar(
                     const SnackBar(
-                      content: Text('Инструкции по сбросу пароля отправлены на email'),
+                      content: Text(
+                        'Инструкции по сбросу пароля отправлены. Откройте письмо и перейдите по ссылке, задайте новый пароль, затем войдите в приложение.',
+                      ),
                       backgroundColor: Colors.green,
                     ),
                   );

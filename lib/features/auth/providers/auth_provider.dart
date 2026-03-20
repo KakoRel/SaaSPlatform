@@ -310,14 +310,18 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
       final userId = _supabaseService.currentUserId;
       if (userId == null) throw const AuthenticationException('User not authenticated');
 
-      final fileName = '$userId.${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final safeExt = extension.trim().toLowerCase();
+      final mimeType = _mapImageExtToMime(safeExt);
+      final finalExt = mimeType == null ? 'png' : safeExt;
+
+      final fileName = '$userId.${DateTime.now().millisecondsSinceEpoch}.$finalExt';
       final path = 'avatars/$fileName';
 
       await _supabaseService.uploadFileBytes(
         bucket: 'avatars',
         path: path,
         bytes: Uint8List.fromList(bytes),
-        contentType: 'image/$extension',
+        contentType: mimeType,
       );
 
       final avatarUrl = _supabaseService.getPublicUrl(bucket: 'avatars', path: path);
@@ -328,6 +332,22 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
+    }
+  }
+
+  String? _mapImageExtToMime(String ext) {
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return null;
     }
   }
 

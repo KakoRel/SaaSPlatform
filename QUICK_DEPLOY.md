@@ -14,8 +14,8 @@ sh get-docker.sh
 apt install -y docker-compose-plugin
 
 # 4. Клонируйте проект
-mkdir -p /opt/saas-platform && cd /opt/saas-platform
-git clone https://github.com/your-username/saas-platform.git .
+mkdir -p /opt/SaaSPlatform && cd /opt/SaaSPlatform
+git clone https://github.com/KakoRel/SaaSPlatform.git .
 
 # 5. Настройте Supabase credentials
 nano lib/core/constants/app_constants.dart
@@ -54,7 +54,7 @@ docker compose up -d
 ## Обновление приложения
 
 ```bash
-cd /opt/saas-platform
+cd /opt/SaaSPlatform
 git pull
 ./deploy.sh
 ```

@@ -39,7 +39,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       final bytes = await image.readAsBytes();
-      final ext = image.path.split('.').last;
+      // `image.path` на некоторых платформах (и при работе через web) может выглядеть не как файл
+      // (например: "image/ru/<uuid>"). Поэтому расширение берём из `image.name`.
+      final name = image.name;
+      final ext = name.contains('.') ? name.split('.').last : 'png';
       await ref.read(authNotifierProvider.notifier).uploadAvatar(bytes, ext);
 
       if (mounted) {
