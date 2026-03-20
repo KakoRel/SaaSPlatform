@@ -368,7 +368,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Map<TaskStatus, List<Task>> _generateDemoData() {
-    final demoUser = TaskMember(
+    const demoUser = TaskMember(
       id: 'demo-user',
       email: 'demo@taskflow.com',
       fullName: 'Demo User',

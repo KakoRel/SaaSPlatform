@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/projects_provider.dart';
+import '../../providers/projects_provider.dart';
 
 class ProjectMembersDialog extends ConsumerStatefulWidget {
   const ProjectMembersDialog({super.key, required this.projectId});

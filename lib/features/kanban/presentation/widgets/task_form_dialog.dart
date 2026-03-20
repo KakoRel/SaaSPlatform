@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task.dart';
-import '../providers/kanban_provider.dart';
+import '../../providers/kanban_provider.dart';
 import '../../../projects/providers/projects_provider.dart';
 
 class TaskFormDialog extends ConsumerStatefulWidget {
@@ -60,7 +60,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<TaskPriority>(
-                value: _priority,
+                initialValue: _priority,
                 decoration: const InputDecoration(labelText: 'Priority'),
                 items: TaskPriority.values.map((p) {
                   return DropdownMenuItem(
@@ -76,7 +76,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                 builder: (context, snapshot) {
                   final members = snapshot.data ?? [];
                   return DropdownButtonFormField<String?>(
-                    value: _assigneeId,
+                    initialValue: _assigneeId,
                     decoration: const InputDecoration(labelText: 'Assignee'),
                     hint: const Text('Unassigned'),
                     items: [

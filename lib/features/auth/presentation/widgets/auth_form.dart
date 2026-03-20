@@ -377,8 +377,11 @@ class _AuthFormState extends ConsumerState<AuthForm> {
           ElevatedButton(
             onPressed: () async {
               final email = resetEmailController.text.trim();
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(context);
+
               if (email.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(content: Text('Введите email')),
                 );
                 return;
@@ -387,8 +390,8 @@ class _AuthFormState extends ConsumerState<AuthForm> {
               try {
                 await ref.read(authNotifierProvider.notifier).resetPassword(email);
                 if (mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  navigator.pop();
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text('Инструкции по сбросу пароля отправлены на email'),
                       backgroundColor: Colors.green,
@@ -397,7 +400,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text('Ошибка: ${e.toString()}'),
                       backgroundColor: Colors.red,

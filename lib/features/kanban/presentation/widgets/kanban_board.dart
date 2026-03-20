@@ -178,7 +178,7 @@ class _DesktopKanbanBoard extends StatelessWidget {
 }
 
 // Individual Kanban Column
-class _KanbanColumn extends StatelessWidget {
+class _KanbanColumn extends ConsumerWidget {
   const _KanbanColumn({
     required this.status,
     required this.tasks,
@@ -190,7 +190,7 @@ class _KanbanColumn extends StatelessWidget {
   final bool isMobile;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       color: _getColumnColor(status).withAlpha(25),
       child: Column(

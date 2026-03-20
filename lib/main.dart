@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/supabase_client.dart';
+import 'features/projects/domain/entities/project.dart';
 import 'features/projects/providers/projects_provider.dart';
 import 'features/projects/presentation/pages/project_selection_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';

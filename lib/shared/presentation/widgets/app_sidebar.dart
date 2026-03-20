@@ -19,13 +19,13 @@ class AppSidebar extends ConsumerWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).primaryColor,
             ),
-            child: Center(
+            child: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.dashboard, color: Colors.white, size: 48),
-                  const SizedBox(height: 8),
-                  const Text(
+                  Icon(Icons.dashboard, color: Colors.white, size: 48),
+                  SizedBox(height: 8),
+                  Text(
                     'TaskFlow',
                     style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                   ),

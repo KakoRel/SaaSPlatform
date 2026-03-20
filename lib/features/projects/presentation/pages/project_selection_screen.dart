@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/projects_provider.dart';
-import '../domain/entities/project.dart';
+import '../../providers/projects_provider.dart';
+import '../../domain/entities/project.dart';
 
 class ProjectSelectionScreen extends ConsumerStatefulWidget {
   const ProjectSelectionScreen({super.key});
