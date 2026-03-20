@@ -286,6 +286,7 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
         isLoading: false,
         error: e.toString(),
       );
+      rethrow;
     }
   }
 
@@ -326,6 +327,7 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
       state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
+      rethrow;
     }
   }
 

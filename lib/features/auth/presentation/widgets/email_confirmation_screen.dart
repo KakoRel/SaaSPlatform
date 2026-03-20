@@ -210,16 +210,6 @@ class _EmailConfirmationScreenState
                             onPressed: () {
                               Navigator.of(context).pop();
                             },
-                            child: const Text(
-                              'Продолжить без подтверждения',
-                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
                             child: Text(
                               _errorMessage != null ? 'Назад' : 'Вернуться к входу',
                               style: TextStyle(color: Colors.blue[600]),

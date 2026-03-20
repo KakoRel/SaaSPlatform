@@ -258,6 +258,24 @@ class SupabaseClientService {
     }
   }
 
+  Future<void> deleteWhere({
+    required String tableName,
+    required List<QueryFilter> filters,
+  }) async {
+    final client = _requireClient();
+    try {
+      var query = client.from(tableName).delete();
+      for (final filter in filters) {
+        query = query.filter(filter.column, filter.operator, filter.value);
+      }
+      await query;
+    } on PostgrestException catch (e) {
+      throw ServerException('Delete operation failed: ${e.message}');
+    } catch (e) {
+      throw ServerException('Failed to delete data: ${e.toString()}');
+    }
+  }
+
   // RPC methods (for SECURITY DEFINER helpers etc.)
   Future<dynamic> rpc({
     required String functionName,

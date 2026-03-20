@@ -160,6 +160,49 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
       return [];
     }
   }
+
+  Future<void> leaveProject(String projectId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final currentUserId = _supabaseService.currentUserId;
+    if (currentUserId == null) {
+      throw const AuthenticationException('User not authenticated');
+    }
+
+    try {
+      await _supabaseService.deleteWhere(
+        tableName: 'project_members',
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          QueryFilter('user_id', 'eq', currentUserId),
+        ],
+      );
+
+      await loadProjects();
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e is ServerException ? e.message : e.toString(),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _supabaseService.delete(
+        tableName: 'projects',
+        id: projectId,
+      );
+      await loadProjects();
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e is ServerException ? e.message : e.toString(),
+      );
+      rethrow;
+    }
+  }
 }
 
 // Providers
@@ -170,6 +213,7 @@ final projectsProvider = StateNotifierProvider<ProjectsNotifier, ProjectsState>(
 
 final selectedProjectProvider = Provider<Project?>((ref) {
   final state = ref.watch(projectsProvider);
+  if (state.projects.isEmpty) return null;
   if (state.selectedProjectId == null) return null;
   return state.projects.firstWhere(
     (p) => p.id == state.selectedProjectId,

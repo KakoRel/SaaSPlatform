@@ -57,13 +57,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _saveProfile() async {
-    await ref.read(authNotifierProvider.notifier).updateProfile(
-      fullName: _nameController.text.trim(),
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Профиль обновлен')),
+    try {
+      await ref.read(authNotifierProvider.notifier).updateProfile(
+        fullName: _nameController.text.trim(),
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Профиль обновлен')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка обновления профиля: $e')),
+        );
+      }
     }
   }
 
@@ -81,11 +89,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
       ),
-      body: authState.isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
+      body: authState.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
               // Avatar Section
               Center(
                 child: Stack(
@@ -97,6 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ? ClipOval(
                               child: Image.network(
                                 avatarUrl,
+                                key: ValueKey(avatarUrl),
                                 width: 120,
                                 height: 120,
                                 fit: BoxFit.cover,
@@ -228,8 +240,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ),
-            ],
-          ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

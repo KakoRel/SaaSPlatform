@@ -2,68 +2,121 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:saas_platform/features/kanban/domain/entities/task.dart';
 import '../../providers/global_analytics_provider.dart';
+import '../../providers/user_tasks_provider.dart';
+import '../../../projects/providers/projects_provider.dart';
 
 class GlobalAnalyticsScreen extends ConsumerWidget {
   const GlobalAnalyticsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final analyticsState = ref.watch(globalAnalyticsProvider);
-    
+    final tasksAsync = ref.watch(userTasksStreamProvider);
+    final projectsState = ref.watch(projectsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Аналитика по всем проектам'),
         elevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(globalAnalyticsProvider.notifier).refresh(),
-          ),
-        ],
       ),
-      body: analyticsState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : analyticsState.error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Ошибка: ${analyticsState.error}',
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => ref.read(globalAnalyticsProvider.notifier).refresh(),
-                        child: const Text('Повторить'),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () => ref.read(globalAnalyticsProvider.notifier).refresh(),
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.all(24),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate([
-                            _buildGlobalSummary(analyticsState, context),
-                            const SizedBox(height: 32),
-                            _buildStatusBreakdown(analyticsState, context),
-                            const SizedBox(height: 32),
-                            _buildPriorityBreakdown(analyticsState, context),
-                            const SizedBox(height: 32),
-                            _buildProjectsBreakdown(analyticsState, context),
-                          ]),
-                        ),
-                      ),
-                    ],
-                  ),
+      body: tasksAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Text(
+            'Ошибка: $e',
+            style: const TextStyle(color: Colors.red),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        data: (allTasks) {
+          final tasksByStatus = <TaskStatus, int>{
+            for (final status in TaskStatus.values) status: 0,
+          };
+          for (final task in allTasks) {
+            tasksByStatus[task.status] = (tasksByStatus[task.status] ?? 0) + 1;
+          }
+
+          final tasksByPriority = <TaskPriority, int>{
+            for (final priority in TaskPriority.values) priority: 0,
+          };
+          for (final task in allTasks) {
+            tasksByPriority[task.priority] = (tasksByPriority[task.priority] ?? 0) + 1;
+          }
+
+          final completedTasks = allTasks.where((t) => t.status == TaskStatus.done).length;
+          final overdueTasks = allTasks
+              .where((t) =>
+                  t.dueDate != null &&
+                  t.dueDate!.isBefore(DateTime.now()) &&
+                  t.status != TaskStatus.done)
+              .length;
+
+          final totalTasks = allTasks.length;
+
+          final projectsById = {
+            for (final p in projectsState.projects) p.id: p.name,
+          };
+
+          final grouped = <String, List<Task>>{};
+          for (final task in allTasks) {
+            grouped.putIfAbsent(task.projectId, () => <Task>[]).add(task);
+          }
+
+          final tasksByProject = <String, ProjectTaskStats>{};
+          for (final entry in grouped.entries) {
+            final projectId = entry.key;
+            final projectTasks = entry.value;
+
+            final completedCount =
+                projectTasks.where((t) => t.status == TaskStatus.done).length;
+            final overdueCount = projectTasks.where((t) =>
+                t.dueDate != null &&
+                t.dueDate!.isBefore(DateTime.now()) &&
+                t.status != TaskStatus.done).length;
+
+            tasksByProject[projectId] = ProjectTaskStats(
+              projectId: projectId,
+              projectName: projectsById[projectId] ?? projectId,
+              totalTasks: projectTasks.length,
+              completedTasks: completedCount,
+              overdueTasks: overdueCount,
+            );
+          }
+
+          final analyticsState = GlobalAnalyticsState(
+            totalProjects: projectsState.projects.isNotEmpty
+                ? projectsState.projects.length
+                : tasksByProject.keys.length,
+            totalTasks: totalTasks,
+            completedTasks: completedTasks,
+            overdueTasks: overdueTasks,
+            tasksByStatus: tasksByStatus,
+            tasksByPriority: tasksByPriority,
+            tasksByProject: tasksByProject,
+            isLoading: false,
+          );
+
+          return CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildGlobalSummary(analyticsState, context),
+                    const SizedBox(height: 32),
+                    _buildStatusBreakdown(analyticsState, context),
+                    const SizedBox(height: 32),
+                    _buildPriorityBreakdown(analyticsState, context),
+                    const SizedBox(height: 32),
+                    _buildProjectsBreakdown(analyticsState, context),
+                  ]),
                 ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

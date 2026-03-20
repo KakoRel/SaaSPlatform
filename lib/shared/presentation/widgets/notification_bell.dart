@@ -8,7 +8,7 @@ class NotificationBell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(userTasksProvider);
+    final tasksAsync = ref.watch(userTasksStreamProvider);
     final allTasks = tasksAsync.asData?.value ?? const [];
     
     final now = DateTime.now();

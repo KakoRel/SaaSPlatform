@@ -113,6 +113,8 @@ class KanbanBoardWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer(builder: (context, ref, child) {
       final kanbanState = ref.watch(kanbanProvider);
+      final currentUserId = SupabaseClientService.instance.currentUserId;
+      final isOwner = currentUserId != null && selectedProject.ownerId == currentUserId;
       
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -132,6 +134,76 @@ class KanbanBoardWrapper extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(selectedProject.id),
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<int>(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Управление проектом',
+              itemBuilder: (context) => [
+                if (!isOwner)
+                  const PopupMenuItem<int>(
+                    value: 1,
+                    child: Text('Покинуть проект'),
+                  ),
+                if (isOwner)
+                  const PopupMenuItem<int>(
+                    value: 2,
+                    child: Text('Удалить проект'),
+                  ),
+              ],
+              onSelected: (value) async {
+                final notifier = ref.read(projectsProvider.notifier);
+
+                try {
+                  if (value == 1) {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Покинуть проект'),
+                        content: const Text('Вы уверены, что хотите покинуть проект?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Отмена'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Покинуть'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    await notifier.leaveProject(selectedProject.id);
+                  } else if (value == 2) {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Удалить проект'),
+                        content: const Text('Удаление проекта необратимо. Продолжить?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Отмена'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Удалить'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    await notifier.deleteProject(selectedProject.id);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ошибка: $e')),
+                    );
+                  }
+                }
+              },
             ),
             const SizedBox(width: 8),
           ],

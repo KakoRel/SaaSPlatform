@@ -8,7 +8,7 @@ class AnalyticsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(userTasksProvider);
+    final tasksAsync = ref.watch(userTasksStreamProvider);
 
     return Scaffold(
       appBar: AppBar(
