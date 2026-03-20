@@ -262,54 +262,63 @@ class _KanbanColumn extends ConsumerWidget {
           ),
           
           // Tasks List
-          Expanded(
-            child: DragTarget<Map<String, dynamic>>(
-              onWillAcceptWithDetails: (details) => (details.data['task'] as Task).status != status,
-              onAcceptWithDetails: (details) {
-                final task = details.data['task'] as Task;
-                final fromIndex = details.data['index'] as int;
-                ref.read(kanbanProvider.notifier).handleDragDrop(
-                      taskId: task.id,
-                      fromStatus: task.status,
-                      toStatus: status,
-                      fromIndex: fromIndex,
-                      toIndex: tasks.length,
-                    );
-              },
-              builder: (context, candidateData, rejectedData) {
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  color: candidateData.isNotEmpty
-                      ? color.withValues(alpha: 0.1)
-                      : Colors.transparent,
-                  child: tasks.isEmpty && candidateData.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.layers_outlined, size: 48, color: color.withValues(alpha: 0.2)),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Пустая колонка',
-                                style: TextStyle(color: color.withValues(alpha: 0.3), fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: tasks.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            return _TaskCard(task: tasks[index], isDesktop: !isMobile, index: index);
-                          },
-                        ),
-                );
-              },
-            ),
-          ),
+          isMobile 
+            ? _buildTaskList(context, ref, color)
+            : Expanded(child: _buildTaskList(context, ref, color)),
         ],
       ),
+    );
+  }
+
+  Widget _buildTaskList(BuildContext context, WidgetRef ref, Color color) {
+    return DragTarget<Map<String, dynamic>>(
+      onWillAcceptWithDetails: (details) => (details.data['task'] as Task).status != status,
+      onAcceptWithDetails: (details) {
+        final task = details.data['task'] as Task;
+        final fromIndex = details.data['index'] as int;
+        ref.read(kanbanProvider.notifier).handleDragDrop(
+              taskId: task.id,
+              fromStatus: task.status,
+              toStatus: status,
+              fromIndex: fromIndex,
+              toIndex: tasks.length,
+            );
+      },
+      builder: (context, candidateData, rejectedData) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          color: candidateData.isNotEmpty
+              ? color.withValues(alpha: 0.1)
+              : Colors.transparent,
+          child: tasks.isEmpty && candidateData.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.layers_outlined, size: 48, color: color.withValues(alpha: 0.2)),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Пустая колонка',
+                          style: TextStyle(color: color.withValues(alpha: 0.3), fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  shrinkWrap: isMobile,
+                  physics: isMobile ? const NeverScrollableScrollPhysics() : null,
+                  itemCount: tasks.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    return _TaskCard(task: tasks[index], isDesktop: !isMobile, index: index);
+                  },
+                ),
+        );
+      },
     );
   }
 

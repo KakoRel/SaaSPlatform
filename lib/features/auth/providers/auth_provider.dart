@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
@@ -134,7 +135,10 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
         throw const AuthenticationException('User not found');
       }
 
-      return AppUser.fromJson(userData);
+      final supaUser = _supabaseService.currentUser;
+      return AppUser.fromJson(userData).copyWith(
+        isEmailConfirmed: supaUser?.emailConfirmedAt != null,
+      );
     } catch (e) {
       throw AuthenticationException('Failed to get user details: ${e.toString()}');
     }
@@ -253,7 +257,9 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
       );
 
       state = state.copyWith(
-        user: AppUser.fromJson(updatedUser),
+        user: AppUser.fromJson(updatedUser).copyWith(
+          isEmailConfirmed: _supabaseService.currentUser?.emailConfirmedAt != null,
+        ),
         isLoading: false,
       );
     } catch (e) {
@@ -261,6 +267,41 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
         isLoading: false,
         error: e.toString(),
       );
+    }
+  }
+
+  Future<void> resendConfirmationEmail() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final email = state.user?.email;
+      if (email == null) throw const AuthenticationException('Email not found');
+      await _supabaseService.resendConfirmationEmail(email);
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> uploadAvatar(List<int> bytes, String extension) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final userId = _supabaseService.currentUserId;
+      if (userId == null) throw const AuthenticationException('User not authenticated');
+
+      final fileName = '$userId.${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final path = 'avatars/$fileName';
+
+      await _supabaseService.uploadFileBytes(
+        bucket: 'avatars',
+        path: path,
+        bytes: Uint8List.fromList(bytes),
+        contentType: 'image/$extension',
+      );
+
+      final avatarUrl = _supabaseService.getPublicUrl(bucket: 'avatars', path: path);
+      await updateProfile(avatarUrl: avatarUrl);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 

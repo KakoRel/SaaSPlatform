@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../features/projects/providers/projects_provider.dart';
 import '../../../features/projects/presentation/widgets/project_members_dialog.dart';
-import '../../../features/auth/providers/auth_provider.dart';
+import 'package:saas_platform/features/auth/providers/auth_provider.dart';
+import 'package:saas_platform/features/settings/presentation/pages/settings_screen.dart';
+import 'package:saas_platform/features/analytics/presentation/pages/analytics_screen.dart';
 
 class AppSidebar extends ConsumerWidget {
   const AppSidebar({super.key});
@@ -189,9 +191,21 @@ class AppSidebar extends ConsumerWidget {
         children: [
           _buildActionItem(
             context,
-            icon: Icons.settings_rounded,
-            label: 'Настройки Системы',
-            onTap: () {},
+            icon: Icons.analytics_outlined,
+            label: 'Аналитика',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()));
+            },
+          ),
+          _buildActionItem(
+            context,
+            icon: Icons.settings_outlined,
+            label: 'Настройки',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
           ),
           _buildActionItem(
             context,

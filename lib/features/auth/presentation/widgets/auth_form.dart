@@ -54,17 +54,36 @@ class _AuthFormState extends ConsumerState<AuthForm> {
         }
       }
     } else {
-      // For registration, navigate immediately to confirmation screen
-      // The actual signup will be performed there to avoid "loading" on this page
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => EmailConfirmationScreen(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-            fullName: _nameController.text.trim(),
-          ),
-        ),
-      );
+      // Registration logic
+      setState(() => _isLoading = true);
+      try {
+        await ref.read(authNotifierProvider.notifier).signUpWithEmail(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _nameController.text.trim(),
+        );
+        
+        // After signup, we show the confirmation screen
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EmailConfirmationScreen(
+                email: _emailController.text.trim(),
+                password: _passwordController.text,
+                fullName: _nameController.text.trim(),
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: ${e.toString()}'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 

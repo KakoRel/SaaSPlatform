@@ -13,6 +13,7 @@ import 'features/auth/presentation/widgets/auth_form.dart';
 import 'features/kanban/presentation/widgets/kanban_board.dart';
 import 'features/kanban/providers/kanban_provider.dart';
 import 'shared/presentation/widgets/loading_screen.dart';
+import 'shared/presentation/widgets/notification_bell.dart';
 
 class SupabaseInitializationState {
   const SupabaseInitializationState({
@@ -117,6 +118,8 @@ class KanbanBoardWrapper extends StatelessWidget {
           backgroundColor: Colors.white,
           foregroundColor: Colors.blueGrey[900],
           actions: [
+            const NotificationBell(),
+            const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(selectedProject.id),

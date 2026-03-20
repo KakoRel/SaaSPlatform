@@ -6,6 +6,7 @@ class AppUser {
     this.avatarUrl,
     required this.createdAt,
     required this.updatedAt,
+    this.isEmailConfirmed = false,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class AppUser {
   final String? avatarUrl;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isEmailConfirmed;
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
@@ -23,6 +25,7 @@ class AppUser {
       avatarUrl: json['avatar_url'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      isEmailConfirmed: json['is_email_confirmed'] as bool? ?? false,
     );
   }
 
@@ -34,6 +37,7 @@ class AppUser {
       'avatar_url': avatarUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'is_email_confirmed': isEmailConfirmed,
     };
   }
 
@@ -44,6 +48,7 @@ class AppUser {
     String? avatarUrl,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isEmailConfirmed,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -52,6 +57,7 @@ class AppUser {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isEmailConfirmed: isEmailConfirmed ?? this.isEmailConfirmed,
     );
   }
 }

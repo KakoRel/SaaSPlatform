@@ -26,7 +26,7 @@ class _EmailConfirmationScreenState
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isResending = false;
-  bool _isInitialSignup = false;
+  final bool _isInitialSignup = false;
   String? _errorMessage;
 
   @override
@@ -46,35 +46,6 @@ class _EmailConfirmationScreenState
     ));
 
     _controller.forward();
-
-    // If password is provided, it means we need to perform the initial signup
-    if (widget.password != null) {
-      _isInitialSignup = true;
-      _performSignup();
-    }
-  }
-
-  Future<void> _performSignup() async {
-    try {
-      await ref.read(authNotifierProvider.notifier).signUpWithEmail(
-            email: widget.email,
-            password: widget.password!,
-            fullName: widget.fullName,
-            showLoading: false,
-          );
-      if (mounted) {
-        setState(() {
-          _isInitialSignup = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isInitialSignup = false;
-          _errorMessage = e.toString();
-        });
-      }
-    }
   }
 
   @override
@@ -233,6 +204,16 @@ class _EmailConfirmationScreenState
                             ),
                           ),
                           const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text(
+                              'Продолжить без подтверждения',
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           TextButton(
                             onPressed: () {
                               Navigator.of(context).pop();

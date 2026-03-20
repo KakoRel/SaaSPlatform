@@ -97,6 +97,20 @@ class SupabaseClientService {
     }
   }
 
+  Future<void> resendConfirmationEmail(String email) async {
+    final client = _requireClient();
+    try {
+      await client.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+    } on AuthException catch (e) {
+      throw AuthenticationException(e.message);
+    } catch (e) {
+      throw ServerException('Failed to resend confirmation: ${e.toString()}');
+    }
+  }
+
   Future<void> resetPassword(String email) async {
     final client = _requireClient();
     try {
