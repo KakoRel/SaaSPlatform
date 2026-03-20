@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task.dart';
 import '../../providers/kanban_provider.dart';
 import '../../../../shared/presentation/widgets/adaptive_layout.dart';
+import 'task_form_dialog.dart';
 
 class KanbanBoardWidget extends ConsumerStatefulWidget {
   const KanbanBoardWidget({super.key, required this.projectId});
@@ -236,53 +237,91 @@ class _KanbanColumn extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 20),
+                  color: _getColumnColor(status),
+                  onPressed: () => _showAddTaskDialog(context, ref, status),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
               ],
             ),
           ),
           
           // Tasks List
-          if (tasks.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.inbox_outlined,
-                      size: 48,
-                      color: Colors.grey[400],
+          Expanded(
+            child: DragTarget<Task>(
+              onWillAcceptWithDetails: (details) => details.data.status != status,
+              onAcceptWithDetails: (details) {
+                final task = details.data;
+                ref.read(kanbanProvider.notifier).handleDragDrop(
+                      taskId: task.id,
+                      fromStatus: task.status,
+                      toStatus: status,
+                      fromIndex: tasks.indexWhere((t) => t.id == task.id), // This logic is simplified
+                      toIndex: tasks.length,
+                    );
+              },
+              builder: (context, candidateData, rejectedData) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: candidateData.isNotEmpty
+                        ? _getColumnColor(status).withAlpha(30)
+                        : Colors.transparent,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No tasks',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: isMobile ? const NeverScrollableScrollPhysics() : null,
-              padding: const EdgeInsets.all(16),
-              itemCount: tasks.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                return _TaskCard(task: tasks[index], isDesktop: false);
+                  ),
+                  child: tasks.isEmpty && candidateData.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.inbox_outlined,
+                                size: 48,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No tasks',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: tasks.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            return _TaskCard(task: tasks[index], isDesktop: !isMobile);
+                          },
+                        ),
+                );
               },
             ),
+          ),
         ],
       ),
+    );
+  }
+
+  void _showAddTaskDialog(BuildContext context, WidgetRef ref, TaskStatus status) {
+    showDialog(
+      context: context,
+      builder: (context) => TaskFormDialog(initialStatus: status),
     );
   }
 }
 
 // Task Card Widget
-class _TaskCard extends StatelessWidget {
+class _TaskCard extends ConsumerWidget {
   const _TaskCard({
     required this.task,
     required this.isDesktop,
@@ -292,14 +331,11 @@ class _TaskCard extends StatelessWidget {
   final bool isDesktop;
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final card = Card(
       elevation: 2,
       child: InkWell(
-        onTap: () {
-          // Navigate to task details
-          _showTaskDetails(context, task);
-        },
+        onTap: () => _showTaskDetails(context, ref, task),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: EdgeInsets.all(isDesktop ? 16 : 12),
@@ -311,58 +347,46 @@ class _TaskCard extends StatelessWidget {
               Text(
                 task.title,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                      fontWeight: FontWeight.w600,
+                    ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              
-              if (task.description != null) ...[
+
+              if (task.description != null && task.description!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   task.description!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                        color: Colors.grey[600],
+                      ),
                   maxLines: isDesktop ? 3 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              
+
               const SizedBox(height: 12),
-              
+
               // Bottom Row
               Row(
                 children: [
-                  // Priority Chip
                   _PriorityChip(priority: task.priority),
-                  
-                  // Due Date
                   if (task.dueDate != null) ...[
                     const SizedBox(width: 8),
                     _DueDateChip(dueDate: task.dueDate!),
                   ],
-                  
                   const Spacer(),
-                  
-                  // Assignee Avatar
                   if (task.assignee != null)
                     CircleAvatar(
-                      radius: isDesktop ? 16 : 12,
-                      backgroundImage: task.assignee!.avatarUrl != null
-                          ? NetworkImage(task.assignee!.avatarUrl!)
-                          : null,
-                      child: task.assignee!.avatarUrl == null
-                          ? Text(
-                              (task.assignee!.fullName ?? 'U').isNotEmpty
-                                  ? (task.assignee!.fullName ?? 'U')[0].toUpperCase()
-                                  : 'U',
-                              style: TextStyle(
-                                fontSize: isDesktop ? 12 : 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
+                      radius: isDesktop ? 14 : 10,
+                      backgroundColor: Theme.of(context).primaryColor.withAlpha(50),
+                      child: Text(
+                        (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isDesktop ? 10 : 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -371,36 +395,51 @@ class _TaskCard extends StatelessWidget {
         ),
       ),
     );
+
+    return LongPressDraggable<Task>(
+      data: task,
+      feedback: SizedBox(
+        width: 300,
+        child: Opacity(
+          opacity: 0.8,
+          child: card,
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.5,
+        child: card,
+      ),
+      child: card,
+    );
   }
 
-  void _showTaskDetails(BuildContext context, Task task) {
+  void _showTaskDetails(BuildContext context, WidgetRef ref, Task task) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) => TaskDetailsSheet(task: task),
     );
   }
 }
 
 // Task Details Sheet
-class TaskDetailsSheet extends StatelessWidget {
+class TaskDetailsSheet extends ConsumerWidget {
   const TaskDetailsSheet({super.key, required this.task});
 
   final Task task;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
       maxChildSize: 0.9,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
             children: [
@@ -414,7 +453,31 @@ class TaskDetailsSheet extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              
+
+              // Actions Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        showDialog(
+                          context: context,
+                          builder: (context) => TaskFormDialog(task: task),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _confirmDelete(context, ref),
+                    ),
+                  ],
+                ),
+              ),
+
               // Task Details
               Expanded(
                 child: ListView(
@@ -423,73 +486,111 @@ class TaskDetailsSheet extends StatelessWidget {
                   children: [
                     Text(
                       task.title,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 16),
-                    
-                    if (task.description != null) ...[
+
+                    if (task.description != null && task.description!.isNotEmpty) ...[
                       Text(
                         'Description',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Text(task.description!),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                     ],
-                    
+
                     Row(
                       children: [
-                        Text(
-                          'Priority:',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Priority',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                              ),
+                              const SizedBox(height: 8),
+                              _PriorityChip(priority: task.priority),
+                            ],
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _PriorityChip(priority: task.priority),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Status',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getColumnColor(task.status).withAlpha(50),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _getStatusLabel(task.status),
+                                  style: TextStyle(
+                                    color: _getColumnColor(task.status),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    
+
                     if (task.dueDate != null) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Deadline',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          Text(
-                            'Due Date:',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
+                          const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                           const SizedBox(width: 8),
-                          _DueDateChip(dueDate: task.dueDate!),
+                          Text('${task.dueDate!.day}/${task.dueDate!.month}/${task.dueDate!.year}'),
                         ],
                       ),
                     ],
-                    
+
                     if (task.assignee != null) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Assignee',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          Text(
-                            'Assignee:',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(width: 8),
                           CircleAvatar(
                             radius: 16,
-                            backgroundImage: task.assignee!.avatarUrl != null
-                                ? NetworkImage(task.assignee!.avatarUrl!)
-                                : null,
-                            child: task.assignee!.avatarUrl == null
-                                ? Text(
-                                    (task.assignee!.fullName ?? 'U').isNotEmpty
-                                        ? (task.assignee!.fullName ?? 'U')[0].toUpperCase()
-                                        : 'U',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : null,
+                            backgroundColor: Theme.of(context).primaryColor.withAlpha(50),
+                            child: Text(
+                              (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(task.assignee!.fullName ?? 'Unknown'),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(task.assignee!.fullName ?? 'No Name'),
+                              Text(
+                                task.assignee!.email,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ],
@@ -500,6 +601,31 @@ class TaskDetailsSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Task'),
+        content: const Text('Are you sure you want to delete this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              ref.read(kanbanProvider.notifier).deleteTask(task.id);
+              Navigator.pop(context); // Close confirm dialog
+              Navigator.pop(context); // Close bottom sheet
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 }

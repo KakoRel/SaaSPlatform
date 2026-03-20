@@ -228,14 +228,8 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? description,
     String? assigneeId,
     TaskPriority priority = TaskPriority.medium,
+    DateTime? dueDate,
   }) async {
-    if (state.isDemoData) {
-      state = state.copyWith(
-        error: 'Демо-режим: создание задач недоступно. Подключите Supabase проект.',
-      );
-      return;
-    }
-
     if (state.currentProjectId == null) return;
 
     try {
@@ -248,6 +242,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
           'assignee_id': assigneeId,
           'creator_id': _supabaseService.currentUserId!,
           'priority': priority.name,
+          'due_date': dueDate?.toIso8601String(),
           'position': _getNextPosition(TaskStatus.todo),
         },
         fromJson: (json) => json,
@@ -262,13 +257,6 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     required TaskStatus newStatus,
     required int newPosition,
   }) async {
-    if (state.isDemoData) {
-      state = state.copyWith(
-        error: 'Демо-режим: обновление статуса недоступно. Подключите Supabase проект.',
-      );
-      return;
-    }
-
     try {
       await _supabaseService.update<Map<String, dynamic>>(
         tableName: 'tasks',
@@ -291,14 +279,8 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? assigneeId,
     TaskPriority? priority,
     DateTime? dueDate,
+    TaskStatus? status,
   }) async {
-    if (state.isDemoData) {
-      state = state.copyWith(
-        error: 'Демо-режим: изменение задач недоступно. Подключите Supabase проект.',
-      );
-      return;
-    }
-
     try {
       final updateData = <String, dynamic>{};
       if (title != null) updateData['title'] = title;
@@ -306,6 +288,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       if (assigneeId != null) updateData['assignee_id'] = assigneeId;
       if (priority != null) updateData['priority'] = priority.name;
       if (dueDate != null) updateData['due_date'] = dueDate.toIso8601String();
+      if (status != null) updateData['status'] = status.toDbValue();
 
       await _supabaseService.update<Map<String, dynamic>>(
         tableName: 'tasks',
@@ -319,13 +302,6 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Future<void> deleteTask(String taskId) async {
-    if (state.isDemoData) {
-      state = state.copyWith(
-        error: 'Демо-режим: удаление задач недоступно. Подключите Supabase проект.',
-      );
-      return;
-    }
-
     try {
       await _supabaseService.delete(tableName: 'tasks', id: taskId);
     } catch (e) {

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/supabase_client.dart';
+import 'features/projects/providers/projects_provider.dart';
+import 'features/projects/presentation/pages/project_selection_screen.dart';
+import 'shared/presentation/widgets/app_sidebar.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/presentation/widgets/auth_form.dart';
 import 'features/kanban/presentation/widgets/kanban_board.dart';
@@ -52,7 +55,7 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final initState = ref.watch(supabaseInitializationProvider);
     final authState = ref.watch(authNotifierProvider);
-    final kanbanState = ref.watch(kanbanProvider);
+    final selectedProject = ref.watch(selectedProjectProvider);
 
     return MaterialApp(
       title: AppConstants.appName,
@@ -60,14 +63,14 @@ class MyApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-      home: _buildHome(initState, authState, kanbanState, ref),
+      home: _buildHome(initState, authState, selectedProject, ref),
     );
   }
 
   Widget _buildHome(
     SupabaseInitializationState initState,
     AppAuthState authState,
-    KanbanState kanbanState,
+    Project? selectedProject,
     WidgetRef ref,
   ) {
     if (!initState.isInitialized) {
@@ -82,58 +85,73 @@ class MyApp extends ConsumerWidget {
       return const AuthForm();
     }
 
-    return KanbanBoardWrapper(kanbanState: kanbanState);
+    if (selectedProject == null) {
+      return const ProjectSelectionScreen();
+    }
+
+    return KanbanBoardWrapper(selectedProject: selectedProject);
   }
 }
 
 class KanbanBoardWrapper extends StatelessWidget {
-  const KanbanBoardWrapper({super.key, required this.kanbanState});
+  const KanbanBoardWrapper({super.key, required this.selectedProject});
 
-  final KanbanState kanbanState;
+  final Project selectedProject;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('TaskFlow - Kanban Board'),
-      ),
-      body: Column(
-        children: [
-          if (kanbanState.isDemoData)
-            Container(
-              width: double.infinity,
-              color: Colors.orange[50],
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                kanbanState.demoMessage ??
-                    'Демо-режим: подключите Supabase проект и добавьте себя в project_members, чтобы увидеть реальные данные.',
-                style: const TextStyle(
-                  color: Colors.orange,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            )
-          else if (kanbanState.error != null)
-            Container(
-              width: double.infinity,
-              color: Colors.red[50],
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                kanbanState.error!,
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
+    return Consumer(builder: (context, ref, child) {
+      final kanbanState = ref.watch(kanbanProvider);
+      
+      return Scaffold(
+        drawer: const AppSidebar(),
+        appBar: AppBar(
+          title: Text('${selectedProject.name} - Kanban'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(selectedProject.id),
             ),
-          Expanded(
-            child: KanbanBoardWidget(projectId: kanbanState.currentProjectId ?? 'demo-project'),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+        body: Column(
+          children: [
+            if (kanbanState.isDemoData)
+              Container(
+                width: double.infinity,
+                color: Colors.orange[50],
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  kanbanState.demoMessage ??
+                      'Демо-режим: подключите Supabase проект и добавьте себя в project_members, чтобы увидеть реальные данные.',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else if (kanbanState.error != null)
+              Container(
+                width: double.infinity,
+                color: Colors.red[50],
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  kanbanState.error!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            Expanded(
+              child: KanbanBoardWidget(projectId: selectedProject.id),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
