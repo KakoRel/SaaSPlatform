@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/task.dart';
 import '../../providers/kanban_provider.dart';
 import '../../../../shared/presentation/widgets/adaptive_layout.dart';
+import '../../../../core/services/supabase_client.dart';
 import 'task_form_dialog.dart';
 
 class KanbanBoardWidget extends ConsumerStatefulWidget {
@@ -124,24 +125,37 @@ class _TabletKanbanBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: TaskStatus.values.map((status) {
-          return SizedBox(
-            width: 350,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _KanbanColumn(
-                status: status,
-                tasks: tasksByStatus[status] ?? [],
-                isMobile: false,
-              ),
+    // На web при фиксированной ширине колонок интерфейс "раздувается".
+    // Масштабируем ширину колонок от текущего viewport'а.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth = constraints.maxWidth;
+        final rawColumnWidth = viewportWidth / TaskStatus.values.length;
+        final columnWidth = rawColumnWidth.clamp(240.0, 350.0);
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: viewportWidth),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: TaskStatus.values.map((status) {
+                return SizedBox(
+                  width: columnWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _KanbanColumn(
+                      status: status,
+                      tasks: tasksByStatus[status] ?? [],
+                      isMobile: false,
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -344,9 +358,12 @@ class _TaskCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentUserId = SupabaseClientService.instance.currentUserId;
+    final isAssignedToMe = currentUserId != null && task.assigneeId == currentUserId;
+
     final card = Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isAssignedToMe ? Colors.blue.shade50 : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -355,7 +372,12 @@ class _TaskCard extends ConsumerWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: isAssignedToMe
+              ? Colors.blueAccent.withValues(alpha: 0.35)
+              : Colors.grey.withValues(alpha: 0.1),
+          width: isAssignedToMe ? 1.5 : 1,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -410,6 +432,33 @@ class _TaskCard extends ConsumerWidget {
                                   child: Text(
                                     (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
                                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              )
+                            else
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8.0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withAlpha(30),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey.withAlpha(60)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.person_off_outlined, size: 14, color: Colors.grey),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Не назначен',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -642,13 +691,13 @@ class TaskDetailsSheet extends ConsumerWidget {
                       ),
                     ],
 
-                    if (task.assignee != null) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        'Исполнитель',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 8),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Исполнитель',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    if (task.assignee != null)
                       Row(
                         children: [
                           CircleAvatar(
@@ -671,8 +720,18 @@ class TaskDetailsSheet extends ConsumerWidget {
                             ],
                           ),
                         ],
+                      )
+                    else
+                      Row(
+                        children: const [
+                          Icon(Icons.person_off_outlined, size: 18, color: Colors.grey),
+                          SizedBox(width: 10),
+                          Text(
+                            'Не назначен',
+                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                          ),
+                        ],
                       ),
-                    ],
                   ],
                 ),
               ),
