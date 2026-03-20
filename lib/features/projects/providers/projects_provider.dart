@@ -97,33 +97,20 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
     final searchEmail = email.trim().toLowerCase();
 
     try {
-      // Try exact match first
-      var userData = await _supabaseService.fetchSingle<Map<String, dynamic>>(
-        tableName: 'users',
-        select: 'id, email',
-        fromJson: (json) => json,
-        filters: [QueryFilter('email', 'eq', searchEmail)],
+      // Public.users is protected by RLS (по умолчанию можно читать только свой профиль),
+      // поэтому для invite делаем lookup через SECURITY DEFINER функцию.
+      final rpcResult = await _supabaseService.rpc(
+        functionName: 'find_user_id_by_email_for_project',
+        params: {
+          'p_project_id': projectId,
+          'p_email': searchEmail,
+        },
       );
 
-      // If exact match fails, try case-insensitive search
-      if (userData == null) {
-        final allUsers = await _supabaseService.fetchList<Map<String, dynamic>>(
-          tableName: 'users',
-          select: 'id, email',
-          fromJson: (json) => json,
-        );
-
-        if (allUsers != null) {
-          userData = allUsers.firstWhere(
-            (user) => user['email']?.toString().toLowerCase() == searchEmail,
-            orElse: () => <String, dynamic>{},
-          );
-        }
-        
-        if (userData == null || userData.isEmpty || userData['id'] == null) {
-          throw ServerException('Пользователь с email "$email" не найден в системе. '
-              'Убедитесь, что он уже зарегистрирован.');
-        }
+      final userId = rpcResult == null ? null : rpcResult.toString();
+      if (userId == null || userId.isEmpty) {
+        throw ServerException('Пользователь с email "$email" не найден в системе. '
+            'Убедитесь, что он уже зарегистрирован.');
       }
 
       // Check if already a member
@@ -132,7 +119,7 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
         fromJson: (json) => json,
         filters: [
           QueryFilter('project_id', 'eq', projectId),
-          QueryFilter('user_id', 'eq', userData['id']),
+          QueryFilter('user_id', 'eq', userId),
         ],
       );
 
@@ -144,7 +131,7 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
         tableName: 'project_members',
         data: {
           'project_id': projectId,
-          'user_id': userData['id'],
+          'user_id': userId,
           'role': 'member',
         },
         fromJson: (json) => json,

@@ -22,6 +22,7 @@ CREATE TRIGGER on_project_created
 -- This ensures the owner can always see the project they just created,
 -- even if there's any delay or issue with the membership record.
 DROP POLICY IF EXISTS "Project members can view projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can view projects they are members of" ON public.projects;
 CREATE POLICY "Users can view projects they are members of"
     ON public.projects FOR SELECT
     USING (
@@ -31,3 +32,46 @@ CREATE POLICY "Users can view projects they are members of"
 
 -- 4. Ensure RLS is enabled
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+
+-- ========================================
+-- Invite by email (RLS bypass helper)
+-- ========================================
+-- Public.users is protected by RLS (users can only see their own profile).
+-- For project invitations we need a safe lookup by email.
+-- This function:
+-- - allows only project owners/admins of `p_project_id`
+-- - looks up user id by email (case-insensitive)
+-- - returns NULL if user is not found or access is denied
+
+CREATE OR REPLACE FUNCTION public.find_user_id_by_email_for_project(
+  p_project_id uuid,
+  p_email text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+  v_user_id uuid;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.project_members pm
+    WHERE pm.project_id = p_project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role IN ('owner', 'admin')
+  ) THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT u.id INTO v_user_id
+  FROM public.users u
+  WHERE lower(u.email) = lower(p_email)
+  LIMIT 1;
+
+  RETURN v_user_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.find_user_id_by_email_for_project(uuid, text) TO authenticated;

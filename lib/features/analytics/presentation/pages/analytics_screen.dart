@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:saas_platform/features/kanban/domain/entities/task.dart';
-import 'package:saas_platform/features/kanban/providers/kanban_provider.dart';
+import 'package:saas_platform/features/analytics/providers/user_tasks_provider.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final kanbanState = ref.watch(kanbanProvider);
-    final allTasks = kanbanState.tasksByStatus.values.expand((tasks) => tasks).toList();
-    
-    final totalTasks = allTasks.length;
-    final overdueTasks = allTasks.where((t) => t.dueDate != null && t.dueDate!.isBefore(DateTime.now()) && t.status != TaskStatus.done).length;
-    final completedTasks = allTasks.where((t) => t.status == TaskStatus.done).length;
-    
+    final tasksAsync = ref.watch(userTasksProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Аналитика'),
@@ -22,31 +17,50 @@ class AnalyticsScreen extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(24),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildSummaryCards(totalTasks, overdueTasks, completedTasks),
-                const SizedBox(height: 32),
-                Text(
-                  'Статус задач',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      body: tasksAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
+        data: (allTasks) {
+          final totalTasks = allTasks.length;
+          final overdueTasks = allTasks
+              .where((t) => t.dueDate != null && t.dueDate!.isBefore(DateTime.now()) && t.status != TaskStatus.done)
+              .length;
+          final completedTasks = allTasks.where((t) => t.status == TaskStatus.done).length;
+
+          final tasksByStatus = <TaskStatus, List<Task>>{
+            for (final status in TaskStatus.values) status: [],
+          };
+          for (final task in allTasks) {
+            tasksByStatus[task.status]!.add(task);
+          }
+
+          return CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildSummaryCards(totalTasks, overdueTasks, completedTasks),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Статус задач',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildStatusBreakdown(tasksByStatus, totalTasks),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Приоритеты',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildPriorityBreakdown(allTasks, totalTasks),
+                  ]),
                 ),
-                const SizedBox(height: 16),
-                _buildStatusBreakdown(kanbanState.tasksByStatus, totalTasks),
-                const SizedBox(height: 32),
-                Text(
-                  'Приоритеты',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                _buildPriorityBreakdown(allTasks, totalTasks),
-              ]),
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }

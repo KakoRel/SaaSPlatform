@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:saas_platform/features/kanban/domain/entities/task.dart';
-import 'package:saas_platform/features/kanban/providers/kanban_provider.dart';
+import 'package:saas_platform/features/analytics/providers/user_tasks_provider.dart';
 
 class NotificationBell extends ConsumerWidget {
   const NotificationBell({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final kanbanState = ref.watch(kanbanProvider);
-    final allTasks = kanbanState.tasksByStatus.values.expand((tasks) => tasks).toList();
+    final tasksAsync = ref.watch(userTasksProvider);
+    final allTasks = tasksAsync.asData?.value ?? const [];
     
     final now = DateTime.now();
     final notifications = allTasks.where((task) {

@@ -57,6 +57,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
     final user = authState.user;
+    final avatarUrl = user?.avatarUrl;
+    final initials = (user?.fullName ?? user?.email ?? '?')[0].toUpperCase();
 
     return Scaffold(
       appBar: AppBar(
@@ -77,15 +79,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     CircleAvatar(
                       radius: 60,
                       backgroundColor: Colors.blue[50],
-                      backgroundImage: user?.avatarUrl != null 
-                          ? NetworkImage(user!.avatarUrl!) 
-                          : null,
-                      child: user?.avatarUrl == null 
-                          ? Text(
-                              (user?.fullName ?? user?.email ?? '?')[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                      child: avatarUrl != null && avatarUrl.isNotEmpty
+                          ? ClipOval(
+                              child: Image.network(
+                                avatarUrl,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, _, __) => Text(
+                                  initials,
+                                  style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             )
-                          : null,
+                          : Text(
+                              initials,
+                              style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+                            ),
                     ),
                     Positioned(
                       bottom: 0,

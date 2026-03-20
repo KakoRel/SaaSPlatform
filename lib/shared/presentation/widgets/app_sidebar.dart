@@ -4,7 +4,7 @@ import '../../../features/projects/providers/projects_provider.dart';
 import '../../../features/projects/presentation/widgets/project_members_dialog.dart';
 import 'package:saas_platform/features/auth/providers/auth_provider.dart';
 import 'package:saas_platform/features/settings/presentation/pages/settings_screen.dart';
-import 'package:saas_platform/features/analytics/presentation/pages/analytics_screen.dart';
+import 'package:saas_platform/features/analytics/presentation/pages/global_analytics_screen.dart';
 
 class AppSidebar extends ConsumerWidget {
   const AppSidebar({super.key});
@@ -195,7 +195,10 @@ class AppSidebar extends ConsumerWidget {
             label: 'Аналитика',
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GlobalAnalyticsScreen()),
+              );
             },
           ),
           _buildActionItem(

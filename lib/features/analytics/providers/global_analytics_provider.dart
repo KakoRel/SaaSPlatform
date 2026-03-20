@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../kanban/domain/entities/task.dart';
-import '../../kanban/providers/kanban_provider.dart';
 import '../../projects/providers/projects_provider.dart';
+import 'user_tasks_provider.dart';
 
 class GlobalAnalyticsState {
   const GlobalAnalyticsState({
@@ -82,34 +82,34 @@ class GlobalAnalyticsNotifier extends StateNotifier<GlobalAnalyticsState> {
 
     try {
       final projectsState = ref.read(projectsProvider);
-      final kanbanState = ref.read(kanbanProvider);
-
-      // Get all projects
       final projects = projectsState.projects;
-      
-      // Collect all tasks from all projects
-      final allTasks = <Task>[];
+
+      final allTasks = await ref.read(userTasksProvider.future);
+
+      final projectsById = {
+        for (final project in projects) project.id: project.name,
+      };
+
+      final groupedByProject = <String, List<Task>>{};
+      for (final task in allTasks) {
+        groupedByProject.putIfAbsent(task.projectId, () => <Task>[]).add(task);
+      }
+
       final tasksByProject = <String, ProjectTaskStats>{};
-
-      for (final project in projects) {
-        // Get tasks for this project (you'll need to modify KanbanProvider to support this)
-        final projectTasks = kanbanState.tasksByStatus.values
-            .expand((tasks) => tasks)
-            .where((task) => task.projectId == project.id)
-            .toList();
-
-        allTasks.addAll(projectTasks);
+      for (final entry in groupedByProject.entries) {
+        final projectId = entry.key;
+        final projectTasks = entry.value;
 
         final completedCount = projectTasks.where((t) => t.status == TaskStatus.done).length;
-        final overdueCount = projectTasks.where((t) => 
-            t.dueDate != null && 
-            t.dueDate!.isBefore(DateTime.now()) && 
+        final overdueCount = projectTasks.where((t) =>
+            t.dueDate != null &&
+            t.dueDate!.isBefore(DateTime.now()) &&
             t.status != TaskStatus.done
         ).length;
 
-        tasksByProject[project.id] = ProjectTaskStats(
-          projectId: project.id,
-          projectName: project.name,
+        tasksByProject[projectId] = ProjectTaskStats(
+          projectId: projectId,
+          projectName: projectsById[projectId] ?? projectId,
           totalTasks: projectTasks.length,
           completedTasks: completedCount,
           overdueTasks: overdueCount,
@@ -119,9 +119,9 @@ class GlobalAnalyticsNotifier extends StateNotifier<GlobalAnalyticsState> {
       // Calculate global stats
       final totalTasks = allTasks.length;
       final completedTasks = allTasks.where((t) => t.status == TaskStatus.done).length;
-      final overdueTasks = allTasks.where((t) => 
-          t.dueDate != null && 
-          t.dueDate!.isBefore(DateTime.now()) && 
+      final overdueTasks = allTasks.where((t) =>
+          t.dueDate != null &&
+          t.dueDate!.isBefore(DateTime.now()) &&
           t.status != TaskStatus.done
       ).length;
 
@@ -138,7 +138,7 @@ class GlobalAnalyticsNotifier extends StateNotifier<GlobalAnalyticsState> {
       }
 
       state = state.copyWith(
-        totalProjects: projects.length,
+        totalProjects: projects.isNotEmpty ? projects.length : groupedByProject.keys.length,
         totalTasks: totalTasks,
         completedTasks: completedTasks,
         overdueTasks: overdueTasks,

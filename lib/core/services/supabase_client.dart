@@ -258,6 +258,21 @@ class SupabaseClientService {
     }
   }
 
+  // RPC methods (for SECURITY DEFINER helpers etc.)
+  Future<dynamic> rpc({
+    required String functionName,
+    required Map<String, dynamic> params,
+  }) async {
+    final client = _requireClient();
+    try {
+      return await client.rpc(functionName, params: params);
+    } on PostgrestException catch (e) {
+      throw ServerException('RPC "$functionName" failed: ${e.message}');
+    } catch (e) {
+      throw ServerException('RPC "$functionName" failed: ${e.toString()}');
+    }
+  }
+
   // Realtime subscriptions
   RealtimeChannel subscribeToTable({
     required String tableName,
