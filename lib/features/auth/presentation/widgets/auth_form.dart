@@ -18,8 +18,8 @@ class _AuthFormState extends ConsumerState<AuthForm> {
   final _nameController = TextEditingController();
   
   bool _isLogin = true;
-  bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -27,6 +27,104 @@ class _AuthFormState extends ConsumerState<AuthForm> {
     _passwordController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  String? validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Пожалуйста, введите email';
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+      return 'Пожалуйста, введите корректный email';
+    }
+    return null;
+  }
+
+  String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Пожалуйста, введите пароль';
+    }
+    if (value.length < 6) {
+      return 'Пароль должен содержать минимум 6 символов';
+    }
+    return null;
+  }
+
+  String? validateName(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Пожалуйста, введите имя';
+    }
+    if (value.length < 2) {
+      return 'Имя должно содержать минимум 2 символа';
+    }
+    return null;
+  }
+
+  void showResetPasswordDialog() {
+    final resetEmailController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Сброс пароля'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Введите ваш email для получения инструкций по сбросу пароля.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: resetEmailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = resetEmailController.text.trim();
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(context);
+
+              if (email.isEmpty) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Введите email')),
+                );
+                return;
+              }
+              
+              try {
+                await ref.read(authNotifierProvider.notifier).resetPassword(email);
+                if (mounted) {
+                  navigator.pop();
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Инструкции по сбросу пароля отправлены на email'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Отправить'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -63,7 +161,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
           fullName: _nameController.text.trim(),
         );
         
-        // After signup, we show the confirmation screen
+        // After successful signup, show the confirmation screen
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -77,41 +175,33 @@ class _AuthFormState extends ConsumerState<AuthForm> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка: ${e.toString()}'), backgroundColor: Colors.red),
-          );
+          // Check if it's a rate limit error
+          final errorString = e.toString().toLowerCase();
+          if (errorString.contains('rate limit') || errorString.contains('too many requests')) {
+            // For rate limit, allow user to continue but show warning
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Превышен лимит отправки писем. Вы можете войти позже, когда подтвердите email.'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+            
+            // Navigate to main app anyway (user can use it until email is confirmed)
+            Navigator.of(context).pushReplacementNamed('/home');
+          } else {
+            // For other errors, show error message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Ошибка: ${e.toString()}'), backgroundColor: Colors.red),
+            );
+          }
         }
       } finally {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
-  }
-
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Пожалуйста, введите email';
-    }
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-      return 'Пожалуйста, введите корректный email';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Пожалуйста, введите пароль';
-    }
-    if (value.length < 6) {
-      return 'Пароль должен содержать минимум 6 символов';
-    }
-    return null;
-  }
-
-  String? _validateName(String? value) {
-    if (!_isLogin && (value == null || value.isEmpty)) {
-      return 'Пожалуйста, введите имя';
-    }
-    return null;
   }
 
   @override
@@ -203,7 +293,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                               filled: true,
                               fillColor: Colors.blue[50],
                             ),
-                            validator: _validateName,
+                            validator: validateName,
                             enabled: !_isLoading,
                           ),
                           const SizedBox(height: 16),
@@ -227,7 +317,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                             fillColor: Colors.blue[50],
                           ),
                           keyboardType: TextInputType.emailAddress,
-                          validator: _validateEmail,
+                          validator: validateEmail,
                           enabled: !_isLoading,
                         ),
                         const SizedBox(height: 16),
@@ -259,7 +349,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                             fillColor: Colors.blue[50],
                           ),
                           obscureText: _obscurePassword,
-                          validator: _validatePassword,
+                          validator: validatePassword,
                           enabled: !_isLoading,
                         ),
                         const SizedBox(height: 24),
@@ -343,7 +433,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                           const SizedBox(height: 8),
                           TextButton(
                             onPressed: _isLoading ? null : () {
-                              _showResetPasswordDialog();
+                              showResetPasswordDialog();
                             },
                             child: Text(
                               'Забыли пароль?',
@@ -362,75 +452,6 @@ class _AuthFormState extends ConsumerState<AuthForm> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _showResetPasswordDialog() {
-    final resetEmailController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Сброс пароля'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Введите ваш email для сброса пароля:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: resetEmailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final email = resetEmailController.text.trim();
-              final messenger = ScaffoldMessenger.of(context);
-              final navigator = Navigator.of(context);
-
-              if (email.isEmpty) {
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Введите email')),
-                );
-                return;
-              }
-              
-              try {
-                await ref.read(authNotifierProvider.notifier).resetPassword(email);
-                if (mounted) {
-                  navigator.pop();
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Инструкции по сбросу пароля отправлены на email'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Ошибка: ${e.toString()}'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Отправить'),
-          ),
-        ],
       ),
     );
   }

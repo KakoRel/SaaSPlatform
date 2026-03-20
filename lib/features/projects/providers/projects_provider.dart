@@ -97,16 +97,33 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
     final searchEmail = email.trim().toLowerCase();
 
     try {
-      final userData = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+      // Try exact match first
+      var userData = await _supabaseService.fetchSingle<Map<String, dynamic>>(
         tableName: 'users',
         select: 'id, email',
         fromJson: (json) => json,
         filters: [QueryFilter('email', 'eq', searchEmail)],
       );
 
+      // If exact match fails, try case-insensitive search
       if (userData == null) {
-        throw ServerException('Пользователь с email "$searchEmail" не найден в системе. '
-            'Убедитесь, что он уже зарегистрирован.');
+        final allUsers = await _supabaseService.fetchList<Map<String, dynamic>>(
+          tableName: 'users',
+          select: 'id, email',
+          fromJson: (json) => json,
+        );
+
+        if (allUsers != null) {
+          userData = allUsers.firstWhere(
+            (user) => user['email']?.toString().toLowerCase() == searchEmail,
+            orElse: () => <String, dynamic>{},
+          );
+        }
+        
+        if (userData == null || userData.isEmpty || userData['id'] == null) {
+          throw ServerException('Пользователь с email "$email" не найден в системе. '
+              'Убедитесь, что он уже зарегистрирован.');
+        }
       }
 
       // Check if already a member

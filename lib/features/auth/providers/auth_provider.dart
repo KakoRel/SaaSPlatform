@@ -179,6 +179,11 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
         password: password,
         fullName: fullName,
       );
+      
+      // Reset loading state on success
+      if (showLoading) {
+        state = state.copyWith(isLoading: false);
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -300,6 +305,9 @@ class AuthNotifier extends StateNotifier<AppAuthState> {
 
       final avatarUrl = _supabaseService.getPublicUrl(bucket: 'avatars', path: path);
       await updateProfile(avatarUrl: avatarUrl);
+      
+      // Reset loading state on success
+      state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
