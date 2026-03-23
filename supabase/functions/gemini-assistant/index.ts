@@ -39,7 +39,29 @@ serve(async (req) => {
       );
     }
 
-    const body = await req.json();
+    const rawBody = await req.text();
+    if (!rawBody || rawBody.trim().length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Empty request body" }),
+        {
+          status: 400,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (_e) {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        {
+          status: 400,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
+    }
     const action = (body?.action ?? "improve") as string;
     const text = (body?.text ?? "") as string;
     const instruction = (body?.instruction ??
@@ -79,12 +101,28 @@ serve(async (req) => {
       },
     );
 
-    const json = await response.json();
+    const rawText = await response.text();
+    let json: any = null;
+    try {
+      if (rawText && rawText.trim().length > 0) {
+        json = JSON.parse(rawText);
+      }
+    } catch {
+      // Some Gemini errors may return an empty/invalid body.
+      json = null;
+    }
+
     if (!response.ok) {
-      return new Response(JSON.stringify({ error: json }), {
-        status: 500,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: json ?? rawText ?? "Gemini request failed",
+          status: response.status,
+        }),
+        {
+          status: 500,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const resultText =

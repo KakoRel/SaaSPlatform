@@ -8,6 +8,7 @@ import 'features/projects/domain/entities/project.dart';
 import 'features/projects/providers/projects_provider.dart';
 import 'features/projects/providers/boards_provider.dart';
 import 'features/projects/presentation/pages/project_selection_screen.dart';
+import 'features/projects/presentation/pages/project_structure_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/presentation/widgets/auth_form.dart';
@@ -16,6 +17,8 @@ import 'features/kanban/presentation/widgets/kanban_board.dart';
 import 'features/kanban/providers/kanban_provider.dart';
 import 'shared/presentation/widgets/loading_screen.dart';
 import 'shared/presentation/widgets/notification_bell.dart';
+import 'features/video_call/presentation/widgets/video_call_entry_dialog.dart';
+import 'features/video_call/presentation/widgets/video_call_room_screen.dart';
 
 class SupabaseInitializationState {
   const SupabaseInitializationState({
@@ -118,6 +121,7 @@ class KanbanBoardWrapper extends StatelessWidget {
       final isOwner = currentUserId != null && selectedProject.ownerId == currentUserId;
       final boardsState = ref.watch(boardsProvider);
       final boardsNotifier = ref.read(boardsProvider.notifier);
+      final authState = ref.watch(authNotifierProvider);
 
       final loadedForCurrentProject =
           boardsState.boards.isNotEmpty && boardsState.boards.first.projectId == selectedProject.id;
@@ -176,6 +180,52 @@ class KanbanBoardWrapper extends StatelessWidget {
             const NotificationBell(),
             const SizedBox(width: 8),
             IconButton(
+              icon: const Icon(Icons.video_call_outlined),
+              tooltip: 'Звонок',
+              onPressed: () async {
+                final boardId = boardsState.selectedBoardId;
+                if (boardId == null) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Выберите доску для звонка')),
+                  );
+                  return;
+                }
+
+                final displayName = authState.user?.fullName ??
+                    authState.user?.email ??
+                    'Пользователь';
+
+                try {
+                  final res = await showVideoCallEntryDialog(
+                    context: context,
+                    boardId: boardId,
+                    displayName: displayName,
+                  );
+                  if (res == null) return;
+                  if (!context.mounted) return;
+
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => VideoCallRoomScreen(
+                        boardId: boardId,
+                        roomId: res.roomId,
+                        audioDeviceId: res.audioDeviceId,
+                        videoDeviceId: res.videoDeviceId,
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка звонка: $e')),
+                  );
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(
                 selectedProject.id,
@@ -197,6 +247,10 @@ class KanbanBoardWrapper extends StatelessWidget {
                     value: 2,
                     child: Text('Удалить проект'),
                   ),
+                const PopupMenuItem<int>(
+                  value: 3,
+                  child: Text('Структура проекта'),
+                ),
               ],
               onSelected: (value) async {
                 final notifier = ref.read(projectsProvider.notifier);
@@ -242,6 +296,17 @@ class KanbanBoardWrapper extends StatelessWidget {
                     );
                     if (confirmed != true) return;
                     await notifier.deleteProject(selectedProject.id);
+                  } else if (value == 3) {
+                    if (!context.mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProjectStructureScreen(
+                          projectId: selectedProject.id,
+                          projectName: selectedProject.name,
+                        ),
+                      ),
+                    );
                   }
                 } catch (e) {
                   if (context.mounted) {

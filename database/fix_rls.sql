@@ -97,3 +97,52 @@ CREATE POLICY "Project members can view users in same projects"
         AND pm_other.user_id = users.id
     )
   );
+
+-- ========================================
+-- Display user name by task + user (RLS-safe)
+-- ========================================
+-- Used by document editor to show `updated_by` as a name, not UUID.
+CREATE OR REPLACE FUNCTION public.find_user_display_name_by_task_and_user(
+  p_task_id uuid,
+  p_user_id uuid
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+  v_project_id uuid;
+  v_full_name text;
+  v_email text;
+BEGIN
+  SELECT t.project_id INTO v_project_id
+  FROM public.tasks t
+  WHERE t.id = p_task_id
+  LIMIT 1;
+
+  IF v_project_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- Only allow if current user is a project member of the task's project.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.project_members pm
+    WHERE pm.project_id = v_project_id
+      AND pm.user_id = auth.uid()
+  ) THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT u.full_name, u.email
+    INTO v_full_name, v_email
+  FROM public.users u
+  WHERE u.id = p_user_id
+  LIMIT 1;
+
+  RETURN COALESCE(NULLIF(v_full_name, ''), v_email);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.find_user_display_name_by_task_and_user(uuid, uuid) TO authenticated;

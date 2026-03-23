@@ -107,7 +107,7 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
         },
       );
 
-      final userId = rpcResult == null ? null : rpcResult.toString();
+      final userId = rpcResult?.toString();
       if (userId == null || userId.isEmpty) {
         throw ServerException('Пользователь с email "$email" не найден в системе. '
             'Убедитесь, что он уже зарегистрирован.');

@@ -1100,12 +1100,27 @@ class _TaskDocumentsSectionState extends ConsumerState<_TaskDocumentsSection> {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.description_outlined),
                   title: Text((doc['title'] as String?) ?? 'Документ'),
-                  subtitle: Text(
-                    updatedAt != null
-                        ? 'Изменён: ${updatedAt.toLocal()}'
-                        '${updatedBy != null ? ' • user: $updatedBy' : ''}'
-                        : 'Нет данных об изменениях',
-                  ),
+                  subtitle: updatedAt == null
+                      ? const Text('Нет данных об изменениях')
+                      : FutureBuilder<String?>(
+                          future: updatedBy == null
+                              ? Future.value(null)
+                              : SupabaseClientService.instance.rpc(
+                                  functionName:
+                                      'find_user_display_name_by_task_and_user',
+                                  params: {
+                                    'p_task_id': widget.taskId,
+                                    'p_user_id': updatedBy,
+                                  },
+                                ).then((v) => v?.toString()),
+                          builder: (context, snapshot) {
+                            final updatedByName = snapshot.data ?? updatedBy;
+                            return Text(
+                              'Изменён: ${updatedAt.toLocal()}'
+                              '${updatedByName != null ? ' • user: $updatedByName' : ''}',
+                            );
+                          },
+                        ),
                   onTap: () async {
                     await Navigator.push(
                       context,
