@@ -30,6 +30,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, String> _participantNames = {};
   final Map<String, String?> _avatarUrls = {};
+  final Map<String, List<RTCIceCandidate>> _pendingIceByPeer = {};
 
   MediaStream? _localStream;
 
@@ -318,6 +319,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     if (sdp == null || type == null) return;
 
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
+    await _flushPendingIce(senderId);
     final answer = await pc.createAnswer({'offerToReceiveVideo': 1, 'offerToReceiveAudio': 1});
     await pc.setLocalDescription(answer);
     await _sendAnswer(senderId, answer);
@@ -330,16 +332,41 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     final type = payload['type'] as String?;
     if (sdp == null || type == null) return;
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
+    await _flushPendingIce(senderId);
   }
 
   Future<void> _handleIce(String senderId, Map<String, dynamic> payload) async {
-    final pc = _peerConnections[senderId];
-    if (pc == null) return;
     final candidate = payload['candidate'] as String?;
-    final sdpMid = payload['sdpMid'] as String?;
-    final sdpMLineIndex = payload['sdpMLineIndex'] as int?;
-    if (candidate == null || sdpMid == null || sdpMLineIndex == null) return;
-    await pc.addCandidate(RTCIceCandidate(candidate, sdpMid, sdpMLineIndex));
+    final sdpMid = payload['sdpMid']?.toString();
+    final rawIndex = payload['sdpMLineIndex'];
+    final sdpMLineIndex = rawIndex is int
+        ? rawIndex
+        : (rawIndex is num ? rawIndex.toInt() : int.tryParse(rawIndex?.toString() ?? ''));
+    if (candidate == null || sdpMLineIndex == null) return;
+
+    final ice = RTCIceCandidate(candidate, sdpMid, sdpMLineIndex);
+    final pc = _peerConnections[senderId];
+    if (pc == null) {
+      _pendingIceByPeer.putIfAbsent(senderId, () => []).add(ice);
+      return;
+    }
+    try {
+      await pc.addCandidate(ice);
+    } catch (_) {
+      _pendingIceByPeer.putIfAbsent(senderId, () => []).add(ice);
+    }
+  }
+
+  Future<void> _flushPendingIce(String peerId) async {
+    final pc = _peerConnections[peerId];
+    if (pc == null) return;
+    final pending = _pendingIceByPeer.remove(peerId);
+    if (pending == null || pending.isEmpty) return;
+    for (final candidate in pending) {
+      try {
+        await pc.addCandidate(candidate);
+      } catch (_) {}
+    }
   }
 
   Future<void> _sendOffer(String targetId, RTCSessionDescription offer) async {

@@ -68,35 +68,24 @@ class _ProjectStructureScreenState extends State<ProjectStructureScreen> {
   }
 
   Future<void> _loadFolders() async {
-    final depId = _selectedDepartmentId;
-    if (depId == null) {
-      _folders = [];
-      _selectedFolderId = null;
-      return;
-    }
     final items = await SupabaseClientService.instance.fetchList<Map<String, dynamic>>(
       tableName: 'project_folders',
       select: '*',
-      filters: [
-        QueryFilter('project_id', 'eq', widget.projectId),
-        QueryFilter('department_id', 'eq', depId),
-      ],
+      filters: [QueryFilter('project_id', 'eq', widget.projectId)],
       fromJson: (json) => json,
     );
     _folders = items;
-    _selectedFolderId ??= items.isNotEmpty ? items.first['id'] as String? : null;
+    if (_selectedFolderId != null &&
+        !_folders.any((f) => f['id']?.toString() == _selectedFolderId)) {
+      _selectedFolderId = null;
+    }
   }
 
   Future<void> _loadBoards() async {
-    final filters = <QueryFilter>[
-      QueryFilter('project_id', 'eq', widget.projectId),
-      if (_selectedDepartmentId != null) QueryFilter('department_id', 'eq', _selectedDepartmentId),
-      if (_selectedFolderId != null) QueryFilter('folder_id', 'eq', _selectedFolderId),
-    ];
     _boards = await SupabaseClientService.instance.fetchList<Map<String, dynamic>>(
       tableName: 'boards',
       select: '*',
-      filters: filters,
+      filters: [QueryFilter('project_id', 'eq', widget.projectId)],
       fromJson: (json) => json,
     );
   }
@@ -170,6 +159,64 @@ class _ProjectStructureScreenState extends State<ProjectStructureScreen> {
     }
   }
 
+  Future<void> _renameItem({
+    required String tableName,
+    required String id,
+    required String currentName,
+  }) async {
+    final controller = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Переименовать'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Новое название'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty) return;
+    await SupabaseClientService.instance.update<Map<String, dynamic>>(
+      tableName: tableName,
+      id: id,
+      data: {'name': newName},
+      fromJson: (json) => json,
+    );
+    await _loadAll();
+  }
+
+  Future<void> _deleteItem({
+    required String tableName,
+    required String id,
+    required String title,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Удалить $title'),
+        content: const Text('Действие необратимо. Продолжить?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await SupabaseClientService.instance.delete(tableName: tableName, id: id);
+    await _loadAll();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -215,22 +262,123 @@ class _ProjectStructureScreenState extends State<ProjectStructureScreen> {
                 final depId = d['id']?.toString();
                 final depName = d['name']?.toString() ?? 'Без названия';
                 final depFolders = _folders.where((f) => f['department_id']?.toString() == depId);
-                final depBoards = _boards.where((b) => b['department_id']?.toString() == depId);
+                final depBoards = _boards.where(
+                  (b) => b['department_id']?.toString() == depId && b['folder_id'] == null,
+                );
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('• $depName', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '• $depName',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            onPressed: () => _renameItem(
+                              tableName: 'departments',
+                              id: depId ?? '',
+                              currentName: depName,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            onPressed: () => _deleteItem(
+                              tableName: 'departments',
+                              id: depId ?? '',
+                              title: 'отдел',
+                            ),
+                          ),
+                        ],
+                      ),
                       for (final f in depFolders)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 16, top: 2),
-                          child: Text('↳ Папка: ${f['name'] ?? ''}'),
+                        Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16, top: 2),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text('↳ Папка: ${f['name'] ?? ''}')),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 16),
+                                    onPressed: () => _renameItem(
+                                      tableName: 'project_folders',
+                                      id: f['id']?.toString() ?? '',
+                                      currentName: f['name']?.toString() ?? '',
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, size: 16),
+                                    onPressed: () => _deleteItem(
+                                      tableName: 'project_folders',
+                                      id: f['id']?.toString() ?? '',
+                                      title: 'папку',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ..._boards
+                                .where((b) => b['folder_id']?.toString() == f['id']?.toString())
+                                .map(
+                                  (b) => Padding(
+                                    padding: const EdgeInsets.only(left: 32, top: 2),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text('↳ Доска: ${b['name'] ?? ''}'),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_outlined, size: 16),
+                                          onPressed: () => _renameItem(
+                                            tableName: 'boards',
+                                            id: b['id']?.toString() ?? '',
+                                            currentName: b['name']?.toString() ?? '',
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, size: 16),
+                                          onPressed: () => _deleteItem(
+                                            tableName: 'boards',
+                                            id: b['id']?.toString() ?? '',
+                                            title: 'доску',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                          ],
                         ),
                       for (final b in depBoards)
                         Padding(
                           padding: const EdgeInsets.only(left: 16, top: 2),
-                          child: Text('↳ Доска: ${b['name'] ?? ''}'),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text('↳ Доска: ${b['name'] ?? ''}')),
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                onPressed: () => _renameItem(
+                                  tableName: 'boards',
+                                  id: b['id']?.toString() ?? '',
+                                  currentName: b['name']?.toString() ?? '',
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 16),
+                                onPressed: () => _deleteItem(
+                                  tableName: 'boards',
+                                  id: b['id']?.toString() ?? '',
+                                  title: 'доску',
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                     ],
                   ),
