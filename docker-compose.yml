@@ -8,7 +8,7 @@ services:
     container_name: saas-platform-web
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8085:80"
     environment:
       - NODE_ENV=production
     networks:
