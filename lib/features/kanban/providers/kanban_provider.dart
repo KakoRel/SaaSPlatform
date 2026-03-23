@@ -161,19 +161,39 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   }
 
   Future<List<Task>> _fetchTasks(String projectId, {String? boardId}) async {
-    // Use the view so `Task.fromJson()` receives joined fields:
-    // assignee_name/assignee_email and creator_name/creator_email.
-    final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
-      tableName: 'project_tasks',
-      fromJson: (json) => json,
-      filters: [
-        QueryFilter('project_id', 'eq', projectId),
-        if (boardId != null) QueryFilter('board_id', 'eq', boardId),
-      ],
-      orderBy: [const Ordering('position', ascending: true)],
-    );
+    List<Map<String, dynamic>> tasksData;
+    try {
+      // Use the view so `Task.fromJson()` receives joined fields:
+      // assignee_name/assignee_email and creator_name/creator_email.
+      tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_tasks',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          if (boardId != null) QueryFilter('board_id', 'eq', boardId),
+        ],
+        orderBy: [const Ordering('position', ascending: true)],
+      );
+    } catch (e) {
+      final message = e.toString().toLowerCase();
+      // Backward-compatibility for servers where `project_tasks` view is outdated
+      // and doesn't contain `board_id` yet.
+      if (message.contains('project_tasks.board_id') || message.contains('column board_id')) {
+        tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
+          tableName: 'tasks',
+          fromJson: (json) => json,
+          filters: [
+            QueryFilter('project_id', 'eq', projectId),
+            if (boardId != null) QueryFilter('board_id', 'eq', boardId),
+          ],
+          orderBy: [const Ordering('position', ascending: true)],
+        );
+      } else {
+        rethrow;
+      }
+    }
 
-    final tasks = tasksData.map((data) => Task.fromJson(data)).toList();
+    final tasks = tasksData.map(Task.fromJson).toList();
 
     assert(() {
       final mismatched = tasks

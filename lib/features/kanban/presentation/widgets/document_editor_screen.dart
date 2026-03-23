@@ -625,11 +625,17 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   color: Colors.white,
                                 ),
-                                child: MarkdownBody(
-                                  data: _contentController.text,
-                                  selectable: true,
-                                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                                    p: Theme.of(context).textTheme.bodyMedium,
+                                child: Scrollbar(
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    child: MarkdownBody(
+                                      data: _contentController.text,
+                                      selectable: true,
+                                      softLineBreak: true,
+                                      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                        p: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               )

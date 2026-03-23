@@ -149,11 +149,11 @@ class KanbanBoardWrapper extends StatelessWidget {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String?>(
                     value: boardsState.selectedBoardId,
-                    hint: const Text('Все доски'),
+                    hint: const Text('Основная доска'),
                     items: [
                       const DropdownMenuItem<String?>(
                         value: null,
-                        child: Text('Все доски'),
+                        child: Text('Основная доска'),
                       ),
                       ...boardsState.boards.map((b) {
                         final location = [

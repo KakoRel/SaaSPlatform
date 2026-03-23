@@ -55,6 +55,7 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
 
   String? chosenAudio = firstAudio;
   String? chosenCam = firstCam;
+  var permissionsGranted = false;
 
   // ignore: use_build_context_synchronously
   return showDialog<VideoCallJoinResult>(
@@ -95,6 +96,47 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
                                   ))
                               .toList(),
                         ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final stream = await Helper.openCamera({
+                          'audio': true,
+                          'video': true,
+                        });
+                        for (final t in stream.getTracks()) {
+                          t.stop();
+                        }
+                        permissionsGranted = true;
+                        setState(() {});
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Права на камеру и микрофон выданы')),
+                        );
+                      } catch (e) {
+                        permissionsGranted = false;
+                        setState(() {});
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Не удалось выдать права: $e')),
+                        );
+                      }
+                    },
+                    icon: Icon(
+                      permissionsGranted ? Icons.verified_user : Icons.security_outlined,
+                    ),
+                    label: Text(
+                      permissionsGranted ? 'Права выданы' : 'Выдать права',
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Динамики не требуют отдельного разрешения в браузере.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     value: chosenAudio,
