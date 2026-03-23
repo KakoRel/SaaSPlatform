@@ -19,6 +19,7 @@ import 'shared/presentation/widgets/loading_screen.dart';
 import 'shared/presentation/widgets/notification_bell.dart';
 import 'features/video_call/presentation/widgets/video_call_entry_dialog.dart';
 import 'features/video_call/presentation/widgets/video_call_room_screen.dart';
+import 'features/chat/presentation/widgets/board_chat_button.dart';
 
 class SupabaseInitializationState {
   const SupabaseInitializationState({
@@ -179,6 +180,8 @@ class KanbanBoardWrapper extends StatelessWidget {
               ),
             const NotificationBell(),
             const SizedBox(width: 8),
+            BoardChatButton(boardId: boardsState.selectedBoardId),
+            const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.video_call_outlined),
               tooltip: 'Звонок',

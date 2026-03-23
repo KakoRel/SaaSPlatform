@@ -202,6 +202,16 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
 
     await _ensureAvatarsForParticipants(participantIds);
 
+    // Fallback for setups where realtime events for participants are not delivered.
+    // If someone joined and this client should be offerer, initiate from polling.
+    for (final peerId in participantIds) {
+      if (peerId == _currentUserId) continue;
+      if (_peerConnections.containsKey(peerId)) continue;
+      if (_shouldInitiateOffer(peerId)) {
+        await _connectToPeerAndOffer(peerId);
+      }
+    }
+
     if (participants.length > 1) {
       _hadRemoteParticipant = true;
     } else if (_hadRemoteParticipant && participants.length <= 1) {
