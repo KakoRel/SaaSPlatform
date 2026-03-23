@@ -34,6 +34,9 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
   final Map<String, List<RTCIceCandidate>> _pendingIceByPeer = {};
   final Map<String, String> _remoteTrackSummary = {};
   String _localTrackSummary = '';
+  final Map<String, bool> _makingOfferByPeer = {};
+  final Map<String, bool> _politeByPeer = {};
+  final Map<String, String> _peerConnectionStates = {};
 
   MediaStream? _localStream;
 
@@ -51,6 +54,9 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
   Timer? _activeSpeakerTimer;
   Timer? _participantsSyncTimer;
   bool _isPollingActiveSpeaker = false;
+  Timer? _signalsPollTimer;
+  bool _isPollingSignals = false;
+  final Set<String> _processedSignalIds = {};
 
   @override
   void initState() {
@@ -73,9 +79,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
           .toList();
 
       for (final peerId in others) {
-        if (_shouldInitiateOffer(peerId)) {
-          await _connectToPeerAndOffer(peerId);
-        }
+        await _connectToPeerAndOffer(peerId);
       }
 
       _activeSpeakerTimer ??= Timer.periodic(
@@ -86,15 +90,63 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
         const Duration(seconds: 3),
         (_) => _syncParticipants(),
       );
+
+      _signalsPollTimer ??= Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _pollIncomingSignals(),
+      );
     } finally {
       if (mounted) setState(() => _isConnecting = false);
     }
   }
 
-  bool _shouldInitiateOffer(String peerId) {
+  Future<void> _pollIncomingSignals() async {
+    if (_isPollingSignals) return;
+    final currentUserId = _currentUserId;
+    if (currentUserId == null) return;
+    _isPollingSignals = true;
+    try {
+      final client = SupabaseClientService.instance.client;
+      final rows = await client
+          .from('video_call_signals')
+          .select('id,sender_id,signal_type,payload,created_at')
+          .eq('room_id', widget.roomId)
+          .eq('target_id', currentUserId)
+          .order('created_at', ascending: true)
+          .limit(60);
+
+      for (final row in rows as List) {
+        final r = row as Map<String, dynamic>;
+        final id = r['id']?.toString();
+        if (id == null) continue;
+        if (_processedSignalIds.contains(id)) continue;
+        _processedSignalIds.add(id);
+
+        final senderId = r['sender_id']?.toString();
+        final type = r['signal_type']?.toString();
+        final payload = r['payload'] as Map<String, dynamic>?;
+        if (senderId == null || type == null || payload == null) continue;
+
+        if (type == 'offer') {
+          await _handleOffer(senderId, payload);
+        } else if (type == 'answer') {
+          await _handleAnswer(senderId, payload);
+        } else if (type == 'ice') {
+          await _handleIce(senderId, payload);
+        }
+      }
+    } catch (_) {
+      // ignore
+    } finally {
+      _isPollingSignals = false;
+    }
+  }
+
+  bool _isPolitePeer(String peerId) {
     final me = _currentUserId;
-    if (me == null) return false;
-    return me.compareTo(peerId) < 0;
+    if (me == null) return true;
+    // The lexicographically larger id behaves as "polite" peer.
+    return me.compareTo(peerId) > 0;
   }
 
   Future<void> _pollActiveSpeaker() async {
@@ -238,14 +290,11 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
       }
     }
 
-    // Fallback for setups where realtime events for participants are not delivered.
-    // If someone joined and this client should be offerer, initiate from polling.
+    // Fallback: ensure we try negotiation for any peer we know about.
     for (final peerId in participantIds) {
       if (peerId == _currentUserId) continue;
       if (_peerConnections.containsKey(peerId)) continue;
-      if (_shouldInitiateOffer(peerId)) {
-        await _connectToPeerAndOffer(peerId);
-      }
+      await _connectToPeerAndOffer(peerId);
     }
 
     if (participants.length > 1) {
@@ -271,8 +320,11 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
       tableName: 'video_call_signals',
       channelId: 'video_call_signals_${widget.roomId}',
       callback: (payload) async {
-        final record = payload.newRecord as Map<String, dynamic>?;
-        if (record == null) return;
+        final record = (payload.newRecord != null &&
+                (payload.newRecord as Map?)?.isNotEmpty == true)
+            ? payload.newRecord as Map<String, dynamic>
+            : (payload.oldRecord as Map<String, dynamic>?) ?? const {};
+        if (record.isEmpty) return;
 
         final roomId = record['room_id'] as String?;
         if (roomId != widget.roomId) return;
@@ -307,8 +359,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
         final joinedUserId = record['user_id']?.toString();
         if (joinedUserId != null &&
             joinedUserId != _currentUserId &&
-            !_peerConnections.containsKey(joinedUserId) &&
-            _shouldInitiateOffer(joinedUserId)) {
+            !_peerConnections.containsKey(joinedUserId)) {
           await _connectToPeerAndOffer(joinedUserId);
         }
         await _syncParticipants();
@@ -356,14 +407,24 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     }
 
     _peerConnections[peerId] = pc;
+    _politeByPeer[peerId] = _isPolitePeer(peerId);
     return pc;
   }
 
   Future<void> _connectToPeerAndOffer(String peerId) async {
     final pc = await _ensurePeerConnection(peerId);
-    final offer = await pc.createOffer({'offerToReceiveVideo': 1, 'offerToReceiveAudio': 1});
-    await pc.setLocalDescription(offer);
-    await _sendOffer(peerId, offer);
+    final polite = _politeByPeer[peerId] ?? _isPolitePeer(peerId);
+    _makingOfferByPeer[peerId] = true;
+    try {
+      final offer = await pc.createOffer({
+        'offerToReceiveVideo': 1,
+        'offerToReceiveAudio': 1,
+      });
+      await pc.setLocalDescription(offer);
+      await _sendOffer(peerId, offer);
+    } finally {
+      _makingOfferByPeer[peerId] = false;
+    }
   }
 
   Future<void> _handleOffer(String senderId, Map<String, dynamic> payload) async {
@@ -371,6 +432,16 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     final sdp = payload['sdp'] as String?;
     final type = payload['type'] as String?;
     if (sdp == null || type == null) return;
+
+    final polite = _politeByPeer[senderId] ?? _isPolitePeer(senderId);
+    final makingOffer = _makingOfferByPeer[senderId] ?? false;
+    final signalingState = pc.signalingState ?? RTCSignalingState.RTCSignalingStateStable;
+
+    // Perfect negotiation:
+    // If we are making an offer AND are not polite -> ignore the incoming offer.
+    if ((makingOffer || signalingState != RTCSignalingState.RTCSignalingStateStable) && !polite) {
+      return;
+    }
 
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
     await _flushPendingIce(senderId);
@@ -531,6 +602,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     _localRenderer.dispose();
     _activeSpeakerTimer?.cancel();
     _participantsSyncTimer?.cancel();
+    _signalsPollTimer?.cancel();
     super.dispose();
   }
 
