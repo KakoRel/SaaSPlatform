@@ -30,7 +30,10 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, String> _participantNames = {};
   final Map<String, String?> _avatarUrls = {};
+  final Map<String, MediaStream> _remoteStreamsByPeer = {};
   final Map<String, List<RTCIceCandidate>> _pendingIceByPeer = {};
+  final Map<String, String> _remoteTrackSummary = {};
+  String _localTrackSummary = '';
 
   MediaStream? _localStream;
 
@@ -149,7 +152,17 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
       'video': widget.videoDeviceId == null ? true : {'deviceId': widget.videoDeviceId},
     };
     _localStream = await Helper.openCamera(constraints);
+    if (_localStream != null) {
+      // Ensure tracks are enabled (some browsers may create them disabled).
+      for (final t in _localStream!.getTracks()) {
+        t.enabled = true;
+      }
+      final audioCount = _localStream!.getAudioTracks().length;
+      final videoCount = _localStream!.getVideoTracks().length;
+      _localTrackSummary = 'A:$audioCount V:$videoCount';
+    }
     _localRenderer.srcObject = _localStream;
+    _localRenderer.muted = true; // Prevent echo from local audio.
   }
 
   Future<List<Map<String, dynamic>>> _fetchParticipants() async {
@@ -201,6 +214,29 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
       );
 
     await _ensureAvatarsForParticipants(participantIds);
+
+    // Cleanup peers that left.
+    final remotePeerIds = _peerConnections.keys
+        .where((id) => id != (_currentUserId ?? ''))
+        .toSet();
+    for (final peerId in remotePeerIds) {
+      if (!participantIds.contains(peerId)) {
+        try {
+          _peerConnections[peerId]?.close();
+        } catch (_) {}
+        _peerConnections.remove(peerId);
+        _pendingIceByPeer.remove(peerId);
+        try {
+          _remoteRenderers[peerId]?.dispose();
+        } catch (_) {}
+        _remoteRenderers.remove(peerId);
+        try {
+          _remoteStreamsByPeer[peerId]?.dispose();
+        } catch (_) {}
+        _remoteStreamsByPeer.remove(peerId);
+        _remoteTrackSummary.remove(peerId);
+      }
+    }
 
     // Fallback for setups where realtime events for participants are not delivered.
     // If someone joined and this client should be offerer, initiate from polling.
@@ -292,11 +328,19 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
 
     final remoteRenderer = RTCVideoRenderer();
     await remoteRenderer.initialize();
+    remoteRenderer.muted = false;
     _remoteRenderers[peerId] = remoteRenderer;
 
-    pc.onTrack = (event) {
-      if (event.streams.isEmpty) return;
-      _remoteRenderers[peerId]?.srcObject = event.streams[0];
+    pc.onTrack = (event) async {
+      // Some browsers may deliver streamless tracks (empty `event.streams`).
+      // If we already have a stream for this peer, keep using it.
+      final stream = event.streams.isNotEmpty ? event.streams[0] : _remoteStreamsByPeer[peerId];
+      if (stream == null) return;
+      _remoteStreamsByPeer[peerId] = stream;
+      final audioCount = stream.getAudioTracks().length;
+      final videoCount = stream.getVideoTracks().length;
+      _remoteTrackSummary[peerId] = 'A:$audioCount V:$videoCount';
+      _remoteRenderers[peerId]?.srcObject = stream;
       if (mounted) setState(() {});
     };
 
@@ -478,6 +522,12 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
         pc.close();
       } catch (_) {}
     }
+    for (final s in _remoteStreamsByPeer.values) {
+      try {
+        s.dispose();
+      } catch (_) {}
+    }
+    _remoteStreamsByPeer.clear();
     _localRenderer.dispose();
     _activeSpeakerTimer?.cancel();
     _participantsSyncTimer?.cancel();
@@ -489,6 +539,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     required String title,
     String? avatarUrl,
     bool isActive = false,
+    String? meta,
   }) {
     final borderColor = isActive
         ? Colors.greenAccent.withValues(alpha: 0.95)
@@ -519,14 +570,24 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
               ),
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                    if (meta != null && meta.isNotEmpty)
+                      Text(
+                        meta,
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -576,6 +637,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
                     ),
                     avatarUrl: _avatarUrls[_currentUserId ?? ''],
                     isActive: _activeSpeakerId == _currentUserId,
+                    meta: _localTrackSummary,
                   ),
                   ...remoteEntries.map((entry) {
                     final peerId = entry.key;
@@ -588,6 +650,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
                       ),
                       avatarUrl: _avatarUrls[peerId],
                       isActive: _activeSpeakerId == peerId,
+                      meta: _remoteTrackSummary[peerId],
                     );
                   }),
                 ],

@@ -174,21 +174,25 @@ class _BoardChatPanel extends StatefulWidget {
 
 class _BoardChatPanelState extends State<_BoardChatPanel> {
   final _controller = TextEditingController();
-  int _reloadKey = 0;
+  final _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _messages = [];
+  bool _isLoading = true;
   Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) setState(() => _reloadKey++);
+      _reloadMessages(silent: true);
     });
+    _reloadMessages(silent: false);
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -227,6 +231,38 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
     }).toList();
   }
 
+  Future<void> _reloadMessages({required bool silent}) async {
+    try {
+      final list = await _loadMessages();
+      if (!mounted) return;
+
+      // Avoid visible flicker: update only if something really changed.
+      final changed = _messages.length != list.length ||
+          (list.isNotEmpty &&
+              (_messages.isEmpty || _messages.last['id'] != list.last['id']));
+
+      if (!changed && silent) return;
+
+      final previousLength = _messages.length;
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(list);
+        _isLoading = false;
+      });
+
+      final hasNewMessage = _messages.length > previousLength;
+      if (hasNewMessage || !silent) {
+        _scheduleAutoScrollToBottom();
+      }
+    } catch (_) {
+      // Keep old messages on errors.
+      if (!silent && mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -239,7 +275,30 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
       'message': text,
     });
     _controller.clear();
-    if (mounted) setState(() => _reloadKey++);
+    await _reloadMessages(silent: true);
+    _scheduleAutoScrollToBottom();
+  }
+
+  void _scheduleAutoScrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoScrollToBottom());
+  }
+
+  void _autoScrollToBottom() {
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final maxExtent = position.maxScrollExtent;
+    final distanceFromBottom = maxExtent - position.pixels;
+    final isNearBottom = distanceFromBottom <= 140;
+
+    // Do not hijack scroll when user is reading older messages.
+    if (!isNearBottom && _messages.length > 5) return;
+
+    _scrollController.animateTo(
+      maxExtent,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -276,58 +335,54 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
                   ),
                 ),
                 Expanded(
-                  child: FutureBuilder<List<Map<String, dynamic>>>(
-                    key: ValueKey(_reloadKey),
-                    future: _loadMessages(),
-                    builder: (context, snapshot) {
-                      final messages = snapshot.data ?? const <Map<String, dynamic>>[];
-                      if (snapshot.connectionState == ConnectionState.waiting && messages.isEmpty) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final m = messages[index];
-                          final isMine = m['user_id']?.toString() == myId;
-                          final user = m['user'] as Map<String, dynamic>?;
-                          final name = user?['full_name']?.toString() ??
-                              user?['email']?.toString() ??
-                              'Пользователь';
-                          return Align(
-                            alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              constraints: const BoxConstraints(maxWidth: 300),
-                              decoration: BoxDecoration(
-                                color: isMine ? Colors.blue.withValues(alpha: 0.18) : Colors.white12,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white70,
-                                      fontWeight: FontWeight.w600,
+                  child: _isLoading && _messages.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            final m = _messages[index];
+                            final isMine = m['user_id']?.toString() == myId;
+                            final user = m['user'] as Map<String, dynamic>?;
+                            final name = user?['full_name']?.toString() ??
+                                user?['email']?.toString() ??
+                                'Пользователь';
+                            return Align(
+                              alignment:
+                                  isMine ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(10),
+                                constraints: const BoxConstraints(maxWidth: 300),
+                                decoration: BoxDecoration(
+                                  color: isMine
+                                      ? Colors.blue.withValues(alpha: 0.18)
+                                      : Colors.white12,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    m['message']?.toString() ?? '',
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ],
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      m['message']?.toString() ?? '',
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                            );
+                          },
+                        ),
                 ),
                 Container(
                   padding: const EdgeInsets.all(10),
