@@ -15,6 +15,7 @@ class KanbanState {
     this.isLoading = false,
     this.error,
     this.currentProjectId,
+    this.currentBoardId,
     this.isRealtimeConnected = false,
     this.isDemoData = false,
     this.demoMessage,
@@ -24,6 +25,7 @@ class KanbanState {
   final bool isLoading;
   final String? error;
   final String? currentProjectId;
+  final String? currentBoardId;
   final bool isRealtimeConnected;
   final bool isDemoData;
   final String? demoMessage;
@@ -33,6 +35,7 @@ class KanbanState {
     bool? isLoading,
     String? error,
     String? currentProjectId,
+    String? currentBoardId,
     bool? isRealtimeConnected,
     bool clearError = false,
     bool? isDemoData,
@@ -44,6 +47,7 @@ class KanbanState {
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
       currentProjectId: currentProjectId ?? this.currentProjectId,
+      currentBoardId: currentBoardId ?? this.currentBoardId,
       isRealtimeConnected: isRealtimeConnected ?? this.isRealtimeConnected,
       isDemoData: isDemoData ?? this.isDemoData,
       demoMessage: clearDemoMessage ? null : (demoMessage ?? this.demoMessage),
@@ -60,7 +64,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   Timer? _debounceTimer;
   Timer? _realtimeReloadDebounceTimer;
 
-  Future<void> loadTasks(String projectId) async {
+  Future<void> loadTasks(String projectId, {String? boardId}) async {
     final isUuid = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     ).hasMatch(projectId);
@@ -77,6 +81,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       isLoading: true,
       clearError: true,
       currentProjectId: projectId,
+      currentBoardId: boardId,
       clearDemoMessage: true,
     );
 
@@ -90,7 +95,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     try {
       await _checkProjectAccess(projectId);
 
-      final tasks = await _fetchTasks(projectId);
+      final tasks = await _fetchTasks(projectId, boardId: boardId);
 
       final tasksByStatus = <TaskStatus, List<Task>>{
         for (final status in TaskStatus.values) status: [],
@@ -110,7 +115,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         isDemoData: false,
       );
 
-      _setupRealtimeSubscription(projectId);
+      _setupRealtimeSubscription(projectId, boardId: boardId);
     } on AuthorizationException {
       _activateDemoMode(
         message: 'Пользователь не является участником проекта. Показаны демо-данные.',
@@ -155,7 +160,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     }
   }
 
-  Future<List<Task>> _fetchTasks(String projectId) async {
+  Future<List<Task>> _fetchTasks(String projectId, {String? boardId}) async {
     // Use the view so `Task.fromJson()` receives joined fields:
     // assignee_name/assignee_email and creator_name/creator_email.
     final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
@@ -163,6 +168,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       fromJson: (json) => json,
       filters: [
         QueryFilter('project_id', 'eq', projectId),
+        if (boardId != null) QueryFilter('board_id', 'eq', boardId),
       ],
       orderBy: [const Ordering('position', ascending: true)],
     );
@@ -182,7 +188,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     return tasks;
   }
 
-  void _setupRealtimeSubscription(String projectId) {
+  void _setupRealtimeSubscription(String projectId, {String? boardId}) {
     _tasksChannel?.unsubscribe();
 
     if (state.isDemoData) {
@@ -197,7 +203,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         // joined fields (assignee_name/email). So we debounce a full reload.
         _realtimeReloadDebounceTimer?.cancel();
         _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-          loadTasks(projectId);
+          loadTasks(projectId, boardId: boardId);
         });
       },
     );
@@ -221,6 +227,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         tableName: 'tasks',
         data: {
           'project_id': state.currentProjectId,
+          'board_id': state.currentBoardId,
           'title': title,
           'description': description,
           'assignee_id': assigneeId,
@@ -311,6 +318,148 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       await _supabaseService.delete(tableName: 'tasks', id: taskId);
     } catch (e) {
       state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTaskComments(String taskId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'task_comments',
+        select: '*, users(full_name, email)',
+        fromJson: (json) => json,
+        filters: [QueryFilter('task_id', 'eq', taskId)],
+        orderBy: [const Ordering('created_at', ascending: true)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<void> addTaskComment({
+    required String taskId,
+    required String content,
+  }) async {
+    final userId = _supabaseService.currentUserId;
+    if (userId == null) return;
+    try {
+      await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'task_comments',
+        data: {
+          'task_id': taskId,
+          'user_id': userId,
+          'content': content,
+        },
+        fromJson: (json) => json,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTaskLinks(String taskId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'task_links',
+        fromJson: (json) => json,
+        filters: [QueryFilter('task_id', 'eq', taskId)],
+        orderBy: [const Ordering('created_at', ascending: true)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<void> addTaskLink({
+    required String taskId,
+    required String url,
+    String? title,
+  }) async {
+    try {
+      await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'task_links',
+        data: {
+          'task_id': taskId,
+          'url': url,
+          'title': title,
+          'created_by': _supabaseService.currentUserId,
+        },
+        fromJson: (json) => json,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> deleteTaskLink(String linkId) async {
+    try {
+      await _supabaseService.delete(tableName: 'task_links', id: linkId);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTaskDocuments(String taskId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'documents',
+        fromJson: (json) => json,
+        filters: [QueryFilter('task_id', 'eq', taskId)],
+        orderBy: [const Ordering('updated_at', ascending: false)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> createDocument({
+    required String taskId,
+    required String title,
+    String content = '',
+  }) async {
+    try {
+      final userId = _supabaseService.currentUserId;
+      return await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'documents',
+        data: {
+          'task_id': taskId,
+          'title': title,
+          'content': content,
+          'created_by': userId,
+          'updated_by': userId,
+        },
+        fromJson: (json) => json,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateDocument({
+    required String documentId,
+    required String title,
+    required String content,
+  }) async {
+    try {
+      return await _supabaseService.update<Map<String, dynamic>>(
+        tableName: 'documents',
+        id: documentId,
+        data: {
+          'title': title,
+          'content': content,
+          'updated_by': _supabaseService.currentUserId,
+        },
+        fromJson: (json) => json,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
     }
   }
 

@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 import 'core/services/supabase_client.dart';
 import 'features/projects/domain/entities/project.dart';
 import 'features/projects/providers/projects_provider.dart';
+import 'features/projects/providers/boards_provider.dart';
 import 'features/projects/presentation/pages/project_selection_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';
 import 'features/auth/providers/auth_provider.dart';
@@ -115,6 +116,15 @@ class KanbanBoardWrapper extends StatelessWidget {
       final kanbanState = ref.watch(kanbanProvider);
       final currentUserId = SupabaseClientService.instance.currentUserId;
       final isOwner = currentUserId != null && selectedProject.ownerId == currentUserId;
+      final boardsState = ref.watch(boardsProvider);
+      final boardsNotifier = ref.read(boardsProvider.notifier);
+
+      final loadedForCurrentProject =
+          boardsState.boards.isNotEmpty && boardsState.boards.first.projectId == selectedProject.id;
+      if (!boardsState.isLoading &&
+          (!loadedForCurrentProject || boardsState.boards.isEmpty)) {
+        Future.microtask(() => boardsNotifier.loadBoards(selectedProject.id));
+      }
       
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -129,11 +139,48 @@ class KanbanBoardWrapper extends StatelessWidget {
           backgroundColor: Colors.white,
           foregroundColor: Colors.blueGrey[900],
           actions: [
+            if (boardsState.boards.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: boardsState.selectedBoardId,
+                    hint: const Text('Все доски'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Все доски'),
+                      ),
+                      ...boardsState.boards.map((b) {
+                        final location = [
+                          if (b.departmentName != null) b.departmentName!,
+                          if (b.folderName != null) b.folderName!,
+                        ].join(' / ');
+                        final label = location.isEmpty ? b.name : '$location / ${b.name}';
+                        return DropdownMenuItem<String?>(
+                          value: b.id,
+                          child: Text(label),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      boardsNotifier.selectBoard(value);
+                      ref.read(kanbanProvider.notifier).loadTasks(
+                            selectedProject.id,
+                            boardId: value,
+                          );
+                    },
+                  ),
+                ),
+              ),
             const NotificationBell(),
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
-              onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(selectedProject.id),
+              onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(
+                selectedProject.id,
+                boardId: boardsState.selectedBoardId,
+              ),
             ),
             const SizedBox(width: 8),
             PopupMenuButton<int>(
@@ -236,7 +283,10 @@ class KanbanBoardWrapper extends StatelessWidget {
                 ),
               ),
             Expanded(
-              child: KanbanBoardWidget(projectId: selectedProject.id),
+              child: KanbanBoardWidget(
+                projectId: selectedProject.id,
+                boardId: boardsState.selectedBoardId,
+              ),
             ),
           ],
         ),

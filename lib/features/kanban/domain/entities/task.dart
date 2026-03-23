@@ -74,6 +74,7 @@ class Task {
   const Task({
     required this.id,
     required this.projectId,
+    this.boardId,
     required this.title,
     this.description,
     this.assigneeId,
@@ -92,6 +93,7 @@ class Task {
 
   final String id;
   final String projectId;
+  final String? boardId;
   final String title;
   final String? description;
   final String? assigneeId;
@@ -118,6 +120,7 @@ class Task {
     return Task(
       id: json['id'] as String,
       projectId: json['project_id'] as String,
+      boardId: json['board_id'] as String?,
       title: json['title'] as String,
       description: json['description'] as String?,
       assigneeId: json['assignee_id'] as String?,
@@ -157,6 +160,7 @@ class Task {
     return {
       'id': id,
       'project_id': projectId,
+      'board_id': boardId,
       'title': title,
       'description': description,
       'assignee_id': assigneeId,
@@ -175,6 +179,7 @@ class Task {
   Task copyWith({
     String? id,
     String? projectId,
+    String? boardId,
     String? title,
     String? description,
     String? assigneeId,
@@ -193,6 +198,7 @@ class Task {
     return Task(
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
+      boardId: boardId ?? this.boardId,
       title: title ?? this.title,
       description: description ?? this.description,
       assigneeId: assigneeId ?? this.assigneeId,

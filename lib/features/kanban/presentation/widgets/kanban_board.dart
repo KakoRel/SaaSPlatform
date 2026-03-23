@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../domain/entities/task.dart';
 import '../../providers/kanban_provider.dart';
 import '../../../../shared/presentation/widgets/adaptive_layout.dart';
 import '../../../../core/services/supabase_client.dart';
 import 'task_form_dialog.dart';
+import 'document_editor_screen.dart';
 
 class KanbanBoardWidget extends ConsumerStatefulWidget {
-  const KanbanBoardWidget({super.key, required this.projectId});
+  const KanbanBoardWidget({
+    super.key,
+    required this.projectId,
+    this.boardId,
+  });
 
   final String projectId;
+  final String? boardId;
 
   @override
   ConsumerState<KanbanBoardWidget> createState() => _KanbanBoardWidgetState();
@@ -22,15 +29,21 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
     super.initState();
     // Load tasks on init
     Future.microtask(() {
-      ref.read(kanbanProvider.notifier).loadTasks(widget.projectId);
+      ref.read(kanbanProvider.notifier).loadTasks(
+            widget.projectId,
+            boardId: widget.boardId,
+          );
     });
   }
 
   @override
   void didUpdateWidget(covariant KanbanBoardWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.projectId != widget.projectId) {
-      ref.read(kanbanProvider.notifier).loadTasks(widget.projectId);
+    if (oldWidget.projectId != widget.projectId || oldWidget.boardId != widget.boardId) {
+      ref.read(kanbanProvider.notifier).loadTasks(
+            widget.projectId,
+            boardId: widget.boardId,
+          );
     }
   }
 
@@ -66,7 +79,10 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => kanbanNotifier.loadTasks(widget.projectId),
+              onPressed: () => kanbanNotifier.loadTasks(
+                widget.projectId,
+                boardId: widget.boardId,
+              ),
               child: const Text('Повторить'),
             ),
           ],
@@ -517,11 +533,17 @@ class _TaskCard extends ConsumerWidget {
   }
 
   void _showTaskDetails(BuildContext context, WidgetRef ref, Task task) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => TaskDetailsSheet(task: task),
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: SizedBox(
+          width: 1100,
+          height: MediaQuery.of(context).size.height * 0.88,
+          child: TaskDetailsSheet(task: task),
+        ),
+      ),
     );
   }
 
@@ -535,7 +557,7 @@ class _TaskCard extends ConsumerWidget {
   }
 }
 
-// Task Details Sheet
+// Task Details Dialog Content
 class TaskDetailsSheet extends ConsumerWidget {
   const TaskDetailsSheet({super.key, required this.task});
 
@@ -543,32 +565,14 @@ class TaskDetailsSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
           child: Column(
             children: [
-              // Drag Handle
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              // Actions Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -589,11 +593,8 @@ class TaskDetailsSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-
-              // Task Details
               Expanded(
                 child: ListView(
-                  controller: scrollController,
                   padding: const EdgeInsets.all(16),
                   children: [
                     Text(
@@ -603,7 +604,6 @@ class TaskDetailsSheet extends ConsumerWidget {
                           ),
                     ),
                     const SizedBox(height: 16),
-
                     if (task.imageUrl != null) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -613,23 +613,25 @@ class TaskDetailsSheet extends ConsumerWidget {
                             task.imageUrl!,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                            errorBuilder: (context, error, stackTrace) =>
+                                const SizedBox.shrink(),
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
                     ],
-
                     if (task.description != null && task.description!.isNotEmpty) ...[
                       Text(
                         'Описание',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Text(task.description!),
                       const SizedBox(height: 24),
                     ],
-
                     Row(
                       children: [
                         Expanded(
@@ -638,7 +640,10 @@ class TaskDetailsSheet extends ConsumerWidget {
                             children: [
                               Text(
                                 'Приоритет',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(color: Colors.grey),
                               ),
                               const SizedBox(height: 8),
                               _PriorityBadge(priority: task.priority),
@@ -651,11 +656,15 @@ class TaskDetailsSheet extends ConsumerWidget {
                             children: [
                               Text(
                                 'Статус',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(color: Colors.grey),
                               ),
                               const SizedBox(height: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: _getColumnColor(task.status).withAlpha(50),
                                   borderRadius: BorderRadius.circular(6),
@@ -674,27 +683,33 @@ class TaskDetailsSheet extends ConsumerWidget {
                         ),
                       ],
                     ),
-
                     if (task.dueDate != null) ...[
                       const SizedBox(height: 24),
                       Text(
                         'Крайний срок',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                           const SizedBox(width: 8),
-                          Text('${task.dueDate!.day}/${task.dueDate!.month}/${task.dueDate!.year}'),
+                          Text(
+                            '${task.dueDate!.day}/${task.dueDate!.month}/${task.dueDate!.year}',
+                          ),
                         ],
                       ),
                     ],
-
                     const SizedBox(height: 24),
                     Text(
                       'Исполнитель',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(color: Colors.grey),
                     ),
                     const SizedBox(height: 8),
                     if (task.assignee != null)
@@ -702,10 +717,13 @@ class TaskDetailsSheet extends ConsumerWidget {
                         children: [
                           CircleAvatar(
                             radius: 16,
-                            backgroundColor: Theme.of(context).primaryColor.withAlpha(50),
+                            backgroundColor:
+                                Theme.of(context).primaryColor.withAlpha(50),
                             child: Text(
-                              (task.assignee!.fullName ?? task.assignee!.email)[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              (task.assignee!.fullName ?? task.assignee!.email)[0]
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -715,30 +733,43 @@ class TaskDetailsSheet extends ConsumerWidget {
                               Text(task.assignee!.fullName ?? 'No Name'),
                               Text(
                                 task.assignee!.email,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: Colors.grey),
                               ),
                             ],
                           ),
                         ],
                       )
                     else
-                      Row(
-                        children: const [
+                      const Row(
+                        children: [
                           Icon(Icons.person_off_outlined, size: 18, color: Colors.grey),
                           SizedBox(width: 10),
                           Text(
                             'Не назначен',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                            style:
+                                TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
                           ),
                         ],
                       ),
+                    const SizedBox(height: 24),
+                    _TaskLinksSection(taskId: task.id),
+                    const SizedBox(height: 24),
+                    _TaskDocumentsSection(taskId: task.id),
                   ],
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          flex: 2,
+          child: _TaskCommentsPanel(taskId: task.id),
+        ),
+      ],
     );
   }
 
@@ -765,6 +796,380 @@ class TaskDetailsSheet extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+class _TaskCommentsPanel extends ConsumerStatefulWidget {
+  const _TaskCommentsPanel({required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_TaskCommentsPanel> createState() => _TaskCommentsPanelState();
+}
+
+class _TaskCommentsPanelState extends ConsumerState<_TaskCommentsPanel> {
+  final _controller = TextEditingController();
+  int _refreshKey = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notifier = ref.read(kanbanProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            'Комментарии',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            key: ValueKey(_refreshKey),
+            future: notifier.getTaskComments(widget.taskId),
+            builder: (context, snapshot) {
+              final comments = snapshot.data ?? [];
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (comments.isEmpty) {
+                return const Center(child: Text('Пока нет комментариев'));
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: comments.length,
+                itemBuilder: (context, index) {
+                  final c = comments[index];
+                  final user = c['users'] as Map<String, dynamic>?;
+                  final name = user?['full_name'] as String? ??
+                      user?['email'] as String? ??
+                      'Пользователь';
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text((c['content'] as String?) ?? ''),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  minLines: 1,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Написать комментарий...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () async {
+                  final text = _controller.text.trim();
+                  if (text.isEmpty) return;
+                  await notifier.addTaskComment(taskId: widget.taskId, content: text);
+                  _controller.clear();
+                  if (mounted) {
+                    setState(() => _refreshKey++);
+                  }
+                },
+                icon: const Icon(Icons.send_rounded),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskLinksSection extends ConsumerStatefulWidget {
+  const _TaskLinksSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_TaskLinksSection> createState() => _TaskLinksSectionState();
+}
+
+class _TaskLinksSectionState extends ConsumerState<_TaskLinksSection> {
+  int _refreshKey = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final notifier = ref.read(kanbanProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Ссылки',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => _addLink(context),
+              icon: const Icon(Icons.add_link),
+              label: const Text('Добавить'),
+            ),
+          ],
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey(_refreshKey),
+          future: notifier.getTaskLinks(widget.taskId),
+          builder: (context, snapshot) {
+            final links = snapshot.data ?? [];
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              );
+            }
+            if (links.isEmpty) {
+              return const Text('Нет ссылок');
+            }
+            return Column(
+              children: links.map((link) {
+                final url = (link['url'] as String?) ?? '';
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text((link['title'] as String?) ?? url),
+                  subtitle: Text(url),
+                  leading: const Icon(Icons.link),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () async {
+                      await notifier.deleteTaskLink(link['id'] as String);
+                      if (mounted) setState(() => _refreshKey++);
+                    },
+                  ),
+                  onTap: () async {
+                    final uri = Uri.tryParse(url);
+                    if (uri != null) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addLink(BuildContext context) async {
+    final notifier = ref.read(kanbanProvider.notifier);
+    final titleController = TextEditingController();
+    final urlController = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Новая ссылка'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Название'),
+            ),
+            TextField(
+              controller: urlController,
+              decoration: const InputDecoration(labelText: 'URL'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Добавить'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && urlController.text.trim().isNotEmpty) {
+      await notifier.addTaskLink(
+        taskId: widget.taskId,
+        title: titleController.text.trim().isEmpty ? null : titleController.text.trim(),
+        url: urlController.text.trim(),
+      );
+      if (mounted) {
+        setState(() => _refreshKey++);
+      }
+    }
+
+    titleController.dispose();
+    urlController.dispose();
+  }
+}
+
+class _TaskDocumentsSection extends ConsumerStatefulWidget {
+  const _TaskDocumentsSection({required this.taskId});
+
+  final String taskId;
+
+  @override
+  ConsumerState<_TaskDocumentsSection> createState() => _TaskDocumentsSectionState();
+}
+
+class _TaskDocumentsSectionState extends ConsumerState<_TaskDocumentsSection> {
+  int _refreshKey = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final notifier = ref.read(kanbanProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Документы',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => _createDocument(context),
+              icon: const Icon(Icons.note_add_outlined),
+              label: const Text('Создать'),
+            ),
+          ],
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey(_refreshKey),
+          future: notifier.getTaskDocuments(widget.taskId),
+          builder: (context, snapshot) {
+            final docs = snapshot.data ?? [];
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              );
+            }
+            if (docs.isEmpty) {
+              return const Text('Нет документов');
+            }
+            return Column(
+              children: docs.map((doc) {
+                final updatedAt = DateTime.tryParse((doc['updated_at'] as String?) ?? '');
+                final updatedBy = doc['updated_by'] as String?;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text((doc['title'] as String?) ?? 'Документ'),
+                  subtitle: Text(
+                    updatedAt != null
+                        ? 'Изменён: ${updatedAt.toLocal()}'
+                        '${updatedBy != null ? ' • user: $updatedBy' : ''}'
+                        : 'Нет данных об изменениях',
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DocumentEditorScreen(
+                          taskId: widget.taskId,
+                          initialDocument: doc,
+                        ),
+                      ),
+                    );
+                    if (mounted) setState(() => _refreshKey++);
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createDocument(BuildContext context) async {
+    final notifier = ref.read(kanbanProvider.notifier);
+    final titleController = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Создать документ'),
+        content: TextField(
+          controller: titleController,
+          decoration: const InputDecoration(labelText: 'Название'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && titleController.text.trim().isNotEmpty) {
+      final doc = await notifier.createDocument(
+        taskId: widget.taskId,
+        title: titleController.text.trim(),
+      );
+      if (!mounted || !context.mounted || doc == null) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DocumentEditorScreen(
+            taskId: widget.taskId,
+            initialDocument: doc,
+          ),
+        ),
+      );
+      if (mounted) setState(() => _refreshKey++);
+    }
+
+    titleController.dispose();
   }
 }
 
