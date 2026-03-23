@@ -193,6 +193,11 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       }
     }
 
+    // In UI, null boardId means "Основная доска" (tasks without board_id).
+    if (boardId == null) {
+      tasksData = tasksData.where((row) => row['board_id'] == null).toList();
+    }
+
     final tasks = tasksData.map(Task.fromJson).toList();
 
     assert(() {

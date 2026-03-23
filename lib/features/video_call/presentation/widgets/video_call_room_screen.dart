@@ -45,6 +45,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
 
   String? _activeSpeakerId;
   Timer? _activeSpeakerTimer;
+  Timer? _participantsSyncTimer;
   bool _isPollingActiveSpeaker = false;
 
   @override
@@ -68,16 +69,28 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
           .toList();
 
       for (final peerId in others) {
-        await _connectToPeerAndOffer(peerId);
+        if (_shouldInitiateOffer(peerId)) {
+          await _connectToPeerAndOffer(peerId);
+        }
       }
 
       _activeSpeakerTimer ??= Timer.periodic(
         const Duration(milliseconds: 500),
         (_) => _pollActiveSpeaker(),
       );
+      _participantsSyncTimer ??= Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _syncParticipants(),
+      );
     } finally {
       if (mounted) setState(() => _isConnecting = false);
     }
+  }
+
+  bool _shouldInitiateOffer(String peerId) {
+    final me = _currentUserId;
+    if (me == null) return false;
+    return me.compareTo(peerId) < 0;
   }
 
   Future<void> _pollActiveSpeaker() async {
@@ -247,7 +260,8 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
         final joinedUserId = record['user_id']?.toString();
         if (joinedUserId != null &&
             joinedUserId != _currentUserId &&
-            !_peerConnections.containsKey(joinedUserId)) {
+            !_peerConnections.containsKey(joinedUserId) &&
+            _shouldInitiateOffer(joinedUserId)) {
           await _connectToPeerAndOffer(joinedUserId);
         }
         await _syncParticipants();
@@ -429,6 +443,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
     }
     _localRenderer.dispose();
     _activeSpeakerTimer?.cancel();
+    _participantsSyncTimer?.cancel();
     super.dispose();
   }
 
@@ -462,7 +477,7 @@ class _VideoCallRoomScreenState extends State<VideoCallRoomScreen> {
                   radius: 18,
                   backgroundColor: Colors.white.withValues(alpha: 0.15),
                   backgroundImage: NetworkImage(avatarUrl),
-                  onBackgroundImageError: (_, __) {},
+                  onBackgroundImageError: (error, stackTrace) {},
                 ),
               ),
             Center(

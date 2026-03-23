@@ -161,6 +161,92 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getProjectDepartments(String projectId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'departments',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('name', ascending: true)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getProjectFolders(String projectId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_folders',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('name', ascending: true)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getMemberAccess({
+    required String projectId,
+    required String userId,
+  }) async {
+    try {
+      return await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: 'project_member_access',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          QueryFilter('user_id', 'eq', userId),
+        ],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<void> saveMemberAccess({
+    required String projectId,
+    required String userId,
+    required List<String> departmentIds,
+    required List<String> folderIds,
+  }) async {
+    try {
+      final existing = await getMemberAccess(projectId: projectId, userId: userId);
+      if (existing == null) {
+        await _supabaseService.insert<Map<String, dynamic>>(
+          tableName: 'project_member_access',
+          data: {
+            'project_id': projectId,
+            'user_id': userId,
+            'department_ids': departmentIds,
+            'folder_ids': folderIds,
+          },
+          fromJson: (json) => json,
+        );
+      } else {
+        await _supabaseService.updateWhere<Map<String, dynamic>>(
+          tableName: 'project_member_access',
+          data: {
+            'department_ids': departmentIds,
+            'folder_ids': folderIds,
+          },
+          fromJson: (json) => json,
+          filters: [
+            QueryFilter('project_id', 'eq', projectId),
+            QueryFilter('user_id', 'eq', userId),
+          ],
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
   Future<void> leaveProject(String projectId) async {
     state = state.copyWith(isLoading: true, clearError: true);
     final currentUserId = _supabaseService.currentUserId;

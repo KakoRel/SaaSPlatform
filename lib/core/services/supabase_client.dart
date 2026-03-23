@@ -276,6 +276,28 @@ class SupabaseClientService {
     }
   }
 
+  Future<T?> updateWhere<T>({
+    required String tableName,
+    required Map<String, dynamic> data,
+    required T Function(Map<String, dynamic>) fromJson,
+    required List<QueryFilter> filters,
+    String? select,
+  }) async {
+    final client = _requireClient();
+    try {
+      var query = client.from(tableName).update(data);
+      for (final filter in filters) {
+        query = query.filter(filter.column, filter.operator, filter.value);
+      }
+      final response = await query.select(select ?? '*').maybeSingle();
+      return response != null ? fromJson(response) : null;
+    } on PostgrestException catch (e) {
+      throw ServerException('Update operation failed: ${e.message}');
+    } catch (e) {
+      throw ServerException('Failed to update data: ${e.toString()}');
+    }
+  }
+
   // RPC methods (for SECURITY DEFINER helpers etc.)
   Future<dynamic> rpc({
     required String functionName,
