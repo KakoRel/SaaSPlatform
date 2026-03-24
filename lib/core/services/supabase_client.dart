@@ -150,9 +150,7 @@ class SupabaseClientService {
       var query = client.from(tableName).select(select ?? '*');
 
       if (filters != null) {
-        for (final filter in filters) {
-          query = query.filter(filter.column, filter.operator, filter.value);
-        }
+        query = _applyFilters(query, filters);
       }
 
       // Build the final query with transforms applied at the end
@@ -190,9 +188,7 @@ class SupabaseClientService {
       var query = client.from(tableName).select(select ?? '*');
 
       if (filters != null) {
-        for (final filter in filters) {
-          query = query.filter(filter.column, filter.operator, filter.value);
-        }
+        query = _applyFilters(query, filters);
       }
 
       final data = await query.maybeSingle();
@@ -265,9 +261,7 @@ class SupabaseClientService {
     final client = _requireClient();
     try {
       var query = client.from(tableName).delete();
-      for (final filter in filters) {
-        query = query.filter(filter.column, filter.operator, filter.value);
-      }
+      query = _applyFilters(query, filters);
       await query;
     } on PostgrestException catch (e) {
       throw ServerException('Delete operation failed: ${e.message}');
@@ -286,9 +280,7 @@ class SupabaseClientService {
     final client = _requireClient();
     try {
       var query = client.from(tableName).update(data);
-      for (final filter in filters) {
-        query = query.filter(filter.column, filter.operator, filter.value);
-      }
+      query = _applyFilters(query, filters);
       final response = await query.select(select ?? '*').maybeSingle();
       return response != null ? fromJson(response) : null;
     } on PostgrestException catch (e) {
@@ -408,6 +400,47 @@ class SupabaseClientService {
       throw const ServerException('Supabase client is not initialized');
     }
     return _client!;
+  }
+
+  dynamic _applyFilters(dynamic query, List<QueryFilter> filters) {
+    for (final filter in filters) {
+      switch (filter.operator) {
+        case 'eq':
+          query = query.eq(filter.column, filter.value);
+          break;
+        case 'neq':
+          query = query.neq(filter.column, filter.value);
+          break;
+        case 'gt':
+          query = query.gt(filter.column, filter.value);
+          break;
+        case 'gte':
+          query = query.gte(filter.column, filter.value);
+          break;
+        case 'lt':
+          query = query.lt(filter.column, filter.value);
+          break;
+        case 'lte':
+          query = query.lte(filter.column, filter.value);
+          break;
+        case 'like':
+          query = query.like(filter.column, filter.value.toString());
+          break;
+        case 'ilike':
+          query = query.ilike(filter.column, filter.value.toString());
+          break;
+        case 'is':
+          query = query.isFilter(filter.column, filter.value);
+          break;
+        case 'in':
+          final values = filter.value is List ? filter.value as List : [filter.value];
+          query = query.inFilter(filter.column, values);
+          break;
+        default:
+          query = query.filter(filter.column, filter.operator, filter.value);
+      }
+    }
+    return query;
   }
 }
 

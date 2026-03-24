@@ -24,13 +24,13 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
     final state = ref.watch(projectsProvider);
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFF1E1E24),
       appBar: AppBar(
         title: const Text(
-          'Мои Проекты',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Colors.white),
+          'Проекты',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white),
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFF1E1E24),
         elevation: 0,
         actions: [
           IconButton(
@@ -42,17 +42,6 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.blue[900]!,
-              Colors.blue[700]!,
-              Colors.purple[900]!,
-            ],
-          ),
-        ),
         child: state.isLoading
             ? const Center(child: CircularProgressIndicator(color: Colors.white))
             : state.error != null
@@ -85,12 +74,12 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
           ElevatedButton.icon(
             onPressed: () => _showCreateProjectDialog(context, ref),
             icon: const Icon(Icons.add),
-            label: const Text('Создать Новый Проект'),
+            label: const Text('Создать новый проект'),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blue[900],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: const Color(0xFF4C9AFF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -102,7 +91,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return GridView.builder(
-      padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 80, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: isMobile ? 1 : 2,
         crossAxisSpacing: 16,
@@ -126,9 +115,12 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.white.withValues(alpha: 0.9),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Новый Проект', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF252830),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xFF343945)),
+        ),
+        title: const Text('Новый проект', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -154,7 +146,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: Colors.grey[700])),
+            child: const Text('Отмена', style: TextStyle(color: Color(0xFFB6C2CF))),
           ),
           ElevatedButton(
             onPressed: () {
@@ -168,7 +160,7 @@ class _ProjectSelectionScreenState extends ConsumerState<ProjectSelectionScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
+              backgroundColor: const Color(0xFF4C9AFF),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -188,20 +180,20 @@ class _ProjectGridItem extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+        color: const Color(0xFF252830),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF343945), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: InkWell(
         onTap: () => ref.read(projectsProvider.notifier).selectProject(project.id),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -212,13 +204,13 @@ class _ProjectGridItem extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(14),
+                      color: const Color(0xFF2B2D31),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.folder_copy, color: Colors.white, size: 24),
+                    child: const Icon(Icons.folder_copy, color: Color(0xFF4C9AFF), size: 24),
                   ),
                   const Spacer(),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                  const Icon(Icons.arrow_forward_ios, color: Color(0xFFB6C2CF), size: 16),
                 ],
               ),
               const Spacer(),
@@ -235,9 +227,9 @@ class _ProjectGridItem extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                project.description ?? 'No description available',
+                project.description ?? 'Описание отсутствует',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
+                  color: const Color(0xFFB6C2CF),
                   fontSize: 14,
                 ),
                 maxLines: 2,

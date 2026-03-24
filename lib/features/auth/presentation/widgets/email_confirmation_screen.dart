@@ -87,7 +87,7 @@ class _EmailConfirmationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[50],
+      backgroundColor: const Color(0xFF1E1E24),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32.0),
@@ -97,9 +97,11 @@ class _EmailConfirmationScreenState
               return Transform.scale(
                 scale: _scaleAnimation.value,
                 child: Card(
-                  elevation: 8,
+                  color: const Color(0xFF252830),
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: Color(0xFF343945)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(32.0),
@@ -122,13 +124,15 @@ class _EmailConfirmationScreenState
                             width: 80,
                             height: 80,
                             decoration: BoxDecoration(
-                              color: _errorMessage != null ? Colors.red[100] : Colors.orange[100],
+                              color: _errorMessage != null
+                                  ? Colors.red.withValues(alpha: 0.15)
+                                  : const Color(0xFF4C9AFF).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(40),
                             ),
                             child: Icon(
                               _errorMessage != null ? Icons.error_outline : Icons.email_outlined,
                               size: 40,
-                              color: _errorMessage != null ? Colors.red[600] : Colors.orange[600],
+                              color: _errorMessage != null ? Colors.red[300] : const Color(0xFF4C9AFF),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -136,7 +140,7 @@ class _EmailConfirmationScreenState
                             _errorMessage != null ? 'Произошла ошибка' : 'Подтвердите ваш email',
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue[900],
+                                  color: Colors.white,
                                 ),
                           ),
                           const SizedBox(height: 16),
@@ -150,7 +154,7 @@ class _EmailConfirmationScreenState
                             Text(
                               'Мы отправили письмо подтверждения на:',
                               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: Colors.grey[600],
+                                    color: Colors.white70,
                                   ),
                               textAlign: TextAlign.center,
                             ),
@@ -161,15 +165,15 @@ class _EmailConfirmationScreenState
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.blue[50],
+                                color: const Color(0xFF2B2D31),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.blue[200]!),
+                                border: Border.all(color: const Color(0xFF3B4250)),
                               ),
                               child: Text(
                                 widget.email,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue[700],
+                                  color: const Color(0xFF4C9AFF),
                                 ),
                               ),
                             ),
@@ -177,7 +181,7 @@ class _EmailConfirmationScreenState
                             Text(
                               'Проверьте вашу почту и перейдите по ссылке в письме для завершения регистрации.',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.grey[600],
+                                    color: Colors.white70,
                                   ),
                               textAlign: TextAlign.center,
                             ),
@@ -212,7 +216,7 @@ class _EmailConfirmationScreenState
                             },
                             child: Text(
                               _errorMessage != null ? 'Назад' : 'Вернуться к входу',
-                              style: TextStyle(color: Colors.blue[600]),
+                              style: const TextStyle(color: Color(0xFF4C9AFF)),
                             ),
                           ),
                         ],
@@ -221,7 +225,7 @@ class _EmailConfirmationScreenState
                           Text(
                             'Не получили письмо? Проверьте папку "Спам".',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey[500],
+                                  color: Colors.white54,
                                 ),
                             textAlign: TextAlign.center,
                           ),

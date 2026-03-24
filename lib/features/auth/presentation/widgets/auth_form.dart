@@ -177,8 +177,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
               ),
             );
             
-            // Navigate to main app anyway (user can use it until email is confirmed)
-            Navigator.of(context).pushReplacementNamed('/home');
+            // Остаемся на экране авторизации, пользователь может повторить вход позже.
           } else {
             // For other errors, show error message
             ScaffoldMessenger.of(context).showSnackBar(
@@ -197,22 +196,12 @@ class _AuthFormState extends ConsumerState<AuthForm> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
-    
+
     return Scaffold(
+      backgroundColor: const Color(0xFF1E1E24),
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.blue[400]!,
-              Colors.blue[600]!,
-              Colors.blue[800]!,
-            ],
-          ),
-        ),
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
@@ -222,9 +211,11 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                 maxHeight: MediaQuery.of(context).size.height * 0.9,
               ),
               child: Card(
-                elevation: 12,
+                color: const Color(0xFF252830),
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: Color(0xFF343945)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(32.0),
@@ -237,29 +228,29 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                           width: 80,
                           height: 80,
                           decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(20),
+                            color: const Color(0xFF2B2D31),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Icon(
                             Icons.dashboard,
                             size: 40,
-                            color: Colors.blue[600],
+                            color: const Color(0xFF4C9AFF),
                           ),
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'TaskFlow',
+                          'Платформа проектов',
                           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: Colors.blue[900],
+                            color: Colors.white,
                           ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'SaaS Task Management Platform',
+                          _isLogin ? 'Вход в рабочее пространство' : 'Регистрация нового аккаунта',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey[600],
+                            color: Colors.white70,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -271,17 +262,17 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                             decoration: InputDecoration(
                               labelText: 'Имя',
                               hintText: 'Введите ваше имя',
-                              prefixIcon: const Icon(Icons.person, color: Colors.blue),
+                              prefixIcon: const Icon(Icons.person, color: Color(0xFF4C9AFF)),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.blue[200]!),
+                                borderSide: const BorderSide(color: Color(0xFF3B4250)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.blue[400]!),
+                                borderSide: const BorderSide(color: Color(0xFF4C9AFF)),
                               ),
                               filled: true,
-                              fillColor: Colors.blue[50],
+                              fillColor: const Color(0xFF2B2D31),
                             ),
                             validator: validateName,
                             enabled: !_isLoading,
@@ -294,17 +285,17 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                           decoration: InputDecoration(
                             labelText: 'Email',
                             hintText: 'Введите ваш email',
-                            prefixIcon: const Icon(Icons.email, color: Colors.blue),
+                            prefixIcon: const Icon(Icons.email, color: Color(0xFF4C9AFF)),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[200]!),
+                              borderSide: const BorderSide(color: Color(0xFF3B4250)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[400]!),
+                              borderSide: const BorderSide(color: Color(0xFF4C9AFF)),
                             ),
                             filled: true,
-                            fillColor: Colors.blue[50],
+                            fillColor: const Color(0xFF2B2D31),
                           ),
                           keyboardType: TextInputType.emailAddress,
                           validator: validateEmail,
@@ -317,11 +308,11 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                           decoration: InputDecoration(
                             labelText: 'Пароль',
                             hintText: 'Введите пароль',
-                            prefixIcon: const Icon(Icons.lock, color: Colors.blue),
+                            prefixIcon: const Icon(Icons.lock, color: Color(0xFF4C9AFF)),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                                color: Colors.blue[400],
+                                color: const Color(0xFF4C9AFF),
                               ),
                               onPressed: () {
                                 setState(() => _obscurePassword = !_obscurePassword);
@@ -329,14 +320,14 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[200]!),
+                              borderSide: const BorderSide(color: Color(0xFF3B4250)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: Colors.blue[400]!),
+                              borderSide: const BorderSide(color: Color(0xFF4C9AFF)),
                             ),
                             filled: true,
-                            fillColor: Colors.blue[50],
+                            fillColor: const Color(0xFF2B2D31),
                           ),
                           obscureText: _obscurePassword,
                           validator: validatePassword,
@@ -374,7 +365,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                           child: ElevatedButton(
                             onPressed: (_isLoading || authState.isLoading) ? null : _submit,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[600],
+                              backgroundColor: const Color(0xFF4C9AFF),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -413,7 +404,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                                 ? 'Нет аккаунта? Зарегистрироваться'
                                 : 'Уже есть аккаунт? Войти',
                             style: TextStyle(
-                              color: Colors.blue[600],
+                              color: const Color(0xFF4C9AFF),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -428,7 +419,7 @@ class _AuthFormState extends ConsumerState<AuthForm> {
                             child: Text(
                               'Забыли пароль?',
                               style: TextStyle(
-                                color: Colors.blue[600],
+                                color: const Color(0xFF4C9AFF),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

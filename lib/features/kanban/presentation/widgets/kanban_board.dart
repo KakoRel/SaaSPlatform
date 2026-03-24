@@ -33,10 +33,12 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
   String _selectedCreatorId = '';
   String _selectedPriority = '';
   DueDateFilter _dueDateFilter = DueDateFilter.all;
+  late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     // Load tasks on init
     Future.microtask(() {
       ref.read(kanbanProvider.notifier).loadTasks(
@@ -55,6 +57,12 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
             boardId: widget.boardId,
           );
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -160,7 +168,7 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
     return Column(
       children: [
         _BoardFiltersBar(
-          searchQuery: _searchQuery,
+          searchController: _searchController,
           selectedAssigneeId: _selectedAssigneeId,
           selectedIssueType: _selectedIssueType,
           selectedCreatorId: _selectedCreatorId,
@@ -179,6 +187,7 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
           onReset: () {
             setState(() {
               _searchQuery = '';
+              _searchController.clear();
               _selectedAssigneeId = '';
               _selectedIssueType = '';
               _selectedCreatorId = '';
@@ -221,7 +230,7 @@ enum DueDateFilter { all, overdue, today, upcoming, noDueDate }
 
 class _BoardFiltersBar extends StatelessWidget {
   const _BoardFiltersBar({
-    required this.searchQuery,
+    required this.searchController,
     required this.selectedAssigneeId,
     required this.selectedIssueType,
     required this.selectedCreatorId,
@@ -240,7 +249,7 @@ class _BoardFiltersBar extends StatelessWidget {
     required this.onReset,
   });
 
-  final String searchQuery;
+  final TextEditingController searchController;
   final String selectedAssigneeId;
   final String selectedIssueType;
   final String selectedCreatorId;
@@ -269,7 +278,7 @@ class _BoardFiltersBar extends StatelessWidget {
           SizedBox(
             width: 320,
             child: TextFormField(
-              initialValue: searchQuery,
+              controller: searchController,
               onChanged: onSearchChanged,
               decoration: const InputDecoration(
                 hintText: 'Поиск по задачам',

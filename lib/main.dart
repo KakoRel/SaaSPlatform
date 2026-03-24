@@ -8,7 +8,8 @@ import 'features/projects/domain/entities/project.dart';
 import 'features/projects/providers/projects_provider.dart';
 import 'features/projects/providers/boards_provider.dart';
 import 'features/projects/presentation/pages/project_selection_screen.dart';
-import 'features/projects/presentation/pages/project_structure_screen.dart';
+import 'features/analytics/presentation/pages/analytics_screen.dart';
+import 'features/analytics/presentation/pages/global_analytics_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/presentation/widgets/auth_form.dart';
@@ -125,6 +126,8 @@ class KanbanBoardWrapper extends StatelessWidget {
       final boardsState = ref.watch(boardsProvider);
       final boardsNotifier = ref.read(boardsProvider.notifier);
       final authState = ref.watch(authNotifierProvider);
+      final collaborationBoardId = boardsState.selectedBoardId ??
+          (boardsState.boards.isNotEmpty ? boardsState.boards.first.id : null);
 
       final loadedForCurrentProject =
           boardsState.boards.isNotEmpty && boardsState.boards.first.projectId == selectedProject.id;
@@ -168,17 +171,17 @@ class KanbanBoardWrapper extends StatelessWidget {
               actions: [
                 const NotificationBell(),
                 const SizedBox(width: 8),
-                BoardChatButton(boardId: boardsState.selectedBoardId),
+                BoardChatButton(boardId: collaborationBoardId),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.video_call_outlined),
-                  tooltip: 'Звонок',
+                  tooltip: 'Видеозвонок проекта',
                   onPressed: () async {
-                final boardId = boardsState.selectedBoardId;
+                final boardId = collaborationBoardId;
                 if (boardId == null) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Выберите доску для звонка')),
+                    const SnackBar(content: Text('Создайте доску для видеозвонка проекта')),
                   );
                   return;
                 }
@@ -239,10 +242,6 @@ class KanbanBoardWrapper extends StatelessWidget {
                         value: 2,
                         child: Text('Удалить проект'),
                       ),
-                    const PopupMenuItem<int>(
-                      value: 3,
-                      child: Text('Структура проекта'),
-                    ),
                   ],
                   onSelected: (value) async {
                 final notifier = ref.read(projectsProvider.notifier);
@@ -288,17 +287,6 @@ class KanbanBoardWrapper extends StatelessWidget {
                     );
                     if (confirmed != true) return;
                     await notifier.deleteProject(selectedProject.id);
-                  } else if (value == 3) {
-                    if (!context.mounted) return;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProjectStructureScreen(
-                          projectId: selectedProject.id,
-                          projectName: selectedProject.name,
-                        ),
-                      ),
-                    );
                   }
                 } catch (e) {
                   if (context.mounted) {
@@ -1745,11 +1733,16 @@ class _ProjectTopBar extends StatelessWidget {
   }
 }
 
-class _JiraLikeLeftPanel extends StatelessWidget {
+class _JiraLikeLeftPanel extends ConsumerWidget {
   const _JiraLikeLeftPanel();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsState = ref.watch(projectsProvider);
+    final selectedProject = ref.watch(selectedProjectProvider);
+    final projectsNotifier = ref.read(projectsProvider.notifier);
+    final recentProjects = projectsState.projects.take(3).toList();
+
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF252830),
@@ -1757,20 +1750,53 @@ class _JiraLikeLeftPanel extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
       child: ListView(
-        children: const [
-          _PanelHeader(title: 'Для вас'),
-          _PanelItem(icon: Icons.home_outlined, title: 'Обзор'),
-          SizedBox(height: 12),
-          _PanelHeader(title: 'Недавние'),
-          _PanelItem(icon: Icons.folder_outlined, title: 'Front-End Dev', selected: true),
-          _PanelItem(icon: Icons.folder_outlined, title: 'Design System'),
-          SizedBox(height: 12),
-          _PanelHeader(title: 'Другие разделы'),
-          _PanelItem(icon: Icons.insights_outlined, title: 'Отчеты'),
-          _PanelItem(icon: Icons.auto_graph_outlined, title: 'Аналитика'),
-          SizedBox(height: 12),
-          _PanelHeader(title: 'Рекомендуется'),
-          _PanelItem(icon: Icons.lightbulb_outline, title: 'Планы релизов'),
+        children: [
+          const _PanelHeader(title: 'Для вас'),
+          _PanelItem(
+            icon: Icons.home_outlined,
+            title: 'Все проекты',
+            onTap: () => projectsNotifier.selectProject(null),
+          ),
+          const SizedBox(height: 12),
+          const _PanelHeader(title: 'Недавние'),
+          if (recentProjects.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text('Нет проектов', style: TextStyle(color: Colors.white54)),
+            ),
+          ...recentProjects.map(
+            (project) => _PanelItem(
+              icon: Icons.folder_outlined,
+              title: project.name,
+              selected: selectedProject?.id == project.id,
+              onTap: () => projectsNotifier.selectProject(project.id),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _PanelHeader(title: 'Другие разделы'),
+          _PanelItem(
+            icon: Icons.insights_outlined,
+            title: 'Отчеты',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+              );
+            },
+          ),
+          _PanelItem(
+            icon: Icons.auto_graph_outlined,
+            title: 'Аналитика',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GlobalAnalyticsScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          const _PanelHeader(title: 'Рекомендуется'),
+          const _PanelItem(icon: Icons.lightbulb_outline, title: 'Планы релизов'),
         ],
       ),
     );
@@ -1804,11 +1830,13 @@ class _PanelItem extends StatelessWidget {
     required this.icon,
     required this.title,
     this.selected = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1819,6 +1847,7 @@ class _PanelItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
+        onTap: onTap,
         dense: true,
         horizontalTitleGap: 10,
         leading: Icon(icon, color: Colors.white70, size: 18),
