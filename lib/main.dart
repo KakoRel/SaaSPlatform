@@ -114,17 +114,23 @@ class MyApp extends ConsumerWidget {
   }
 }
 
-class KanbanBoardWrapper extends StatelessWidget {
+class KanbanBoardWrapper extends ConsumerStatefulWidget {
   const KanbanBoardWrapper({super.key, required this.selectedProject});
 
   final Project selectedProject;
 
   @override
+  ConsumerState<KanbanBoardWrapper> createState() => _KanbanBoardWrapperState();
+}
+
+class _KanbanBoardWrapperState extends ConsumerState<KanbanBoardWrapper> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer(builder: (context, ref, child) {
       final kanbanState = ref.watch(kanbanProvider);
       final currentUserId = SupabaseClientService.instance.currentUserId;
-      final isOwner = currentUserId != null && selectedProject.ownerId == currentUserId;
+      final isOwner = currentUserId != null && widget.selectedProject.ownerId == currentUserId;
       final boardsState = ref.watch(boardsProvider);
       final boardsNotifier = ref.read(boardsProvider.notifier);
       final authState = ref.watch(authNotifierProvider);
@@ -133,48 +139,46 @@ class KanbanBoardWrapper extends StatelessWidget {
       final collaborationBoardId =
           boardsState.boards.isNotEmpty ? boardsState.boards.first.id : null;
 
-      final needBoardsLoad = boardsState.loadedProjectId != selectedProject.id;
+      final needBoardsLoad = boardsState.loadedProjectId != widget.selectedProject.id;
       if (!boardsState.isLoading && needBoardsLoad) {
-        Future.microtask(() => boardsNotifier.loadBoards(selectedProject.id));
+        Future.microtask(() => boardsNotifier.loadBoards(widget.selectedProject.id));
       }
       
       final isDesktop = MediaQuery.of(context).size.width >= 1200;
 
-      final scaffoldKey = GlobalKey<ScaffoldState>();
-
       return DefaultTabController(
         length: 7,
         child: Scaffold(
-          key: scaffoldKey,
+          key: _scaffoldKey,
           backgroundColor: const Color(0xFF1E1E24),
           drawer: isDesktop ? null : const AppSidebar(),
           appBar: PreferredSize(
             preferredSize: const Size.fromHeight(62),
             child: _ProjectTopBar(
-              projectName: selectedProject.name,
+              projectName: widget.selectedProject.name,
               onCreatePressed: () async {
                 final created = await showDialog<bool>(
                   context: context,
                   builder: (_) => _QuickCreateIssueDialog(
-                    projectId: selectedProject.id,
+                    projectId: widget.selectedProject.id,
                     boardId: boardsState.selectedBoardId,
                   ),
                 );
                 if (created == true) {
                   await ref.read(kanbanProvider.notifier).loadTasks(
-                        selectedProject.id,
+                        widget.selectedProject.id,
                         boardId: boardsState.selectedBoardId,
                       );
                 }
               },
               onOpenDrawer: isDesktop
                   ? null
-                  : () => scaffoldKey.currentState?.openDrawer(),
+                  : () => _scaffoldKey.currentState?.openDrawer(),
               actions: [
                 const NotificationBell(),
                 const SizedBox(width: 8),
                 BoardChatButton(
-                  projectId: selectedProject.id,
+                  projectId: widget.selectedProject.id,
                   boardId: collaborationBoardId,
                 ),
                 const SizedBox(width: 4),
@@ -191,7 +195,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                 try {
                   final res = await showVideoCallEntryDialog(
                     context: context,
-                    projectId: selectedProject.id,
+                    projectId: widget.selectedProject.id,
                     displayName: displayName,
                   );
                   if (res == null) return;
@@ -220,7 +224,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                   icon: const Icon(Icons.refresh_rounded),
                   tooltip: 'Обновить',
                   onPressed: () => ref.read(kanbanProvider.notifier).loadTasks(
-                        selectedProject.id,
+                        widget.selectedProject.id,
                         boardId: boardsState.selectedBoardId,
                       ),
                 ),
@@ -251,7 +255,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                   if (value == 3) {
                     await showDialog<void>(
                       context: context,
-                      builder: (_) => ProjectMembersDialog(projectId: selectedProject.id),
+                      builder: (_) => ProjectMembersDialog(projectId: widget.selectedProject.id),
                     );
                   } else if (value == 1) {
                     final confirmed = await showDialog<bool>(
@@ -272,7 +276,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                       ),
                     );
                     if (confirmed != true) return;
-                    await notifier.leaveProject(selectedProject.id);
+                    await notifier.leaveProject(widget.selectedProject.id);
                   } else if (value == 2) {
                     final confirmed = await showDialog<bool>(
                       context: context,
@@ -292,7 +296,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                       ),
                     );
                     if (confirmed != true) return;
-                    await notifier.deleteProject(selectedProject.id);
+                    await notifier.deleteProject(widget.selectedProject.id);
                   }
                 } catch (e) {
                   if (context.mounted) {
@@ -369,7 +373,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                         children: [
                           _ProjectSummaryTab(kanbanState: kanbanState),
                           BacklogTab(
-                            projectId: selectedProject.id,
+                            projectId: widget.selectedProject.id,
                             boardId: boardsState.selectedBoardId,
                           ),
                           Column(
@@ -419,7 +423,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                                           onChanged: (value) {
                                             boardsNotifier.selectBoard(value);
                                             ref.read(kanbanProvider.notifier).loadTasks(
-                                                  selectedProject.id,
+                                                  widget.selectedProject.id,
                                                   boardId: value,
                                                 );
                                           },
@@ -444,7 +448,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                                 child: Container(
                                   color: const Color(0xFF1E1E24),
                                   child: KanbanBoardWidget(
-                                    projectId: selectedProject.id,
+                                    projectId: widget.selectedProject.id,
                                     boardId: boardsState.selectedBoardId,
                                     onNavigateToBacklog: () => DefaultTabController.of(context).animateTo(1),
                                   ),
@@ -453,10 +457,10 @@ class KanbanBoardWrapper extends StatelessWidget {
                             ],
                           ),
                           _TimelineTab(
-                            projectId: selectedProject.id,
+                            projectId: widget.selectedProject.id,
                           ),
-                          _PagesTab(projectId: selectedProject.id),
-                          _FormsTab(projectId: selectedProject.id),
+                          _PagesTab(projectId: widget.selectedProject.id),
+                          _FormsTab(projectId: widget.selectedProject.id),
                           const _ProjectTabPlaceholder(title: 'Добавить вид', subtitle: 'В разработке'),
                         ],
                       ),
@@ -468,7 +472,6 @@ class KanbanBoardWrapper extends StatelessWidget {
           ),
         ),
       );
-    });
   }
 }
 
@@ -2068,18 +2071,12 @@ class _JiraLikeLeftPanel extends ConsumerWidget {
           _PanelItem(
             icon: Icons.home_outlined,
             title: 'Все проекты',
-            onTap: () async {
-              await projectsNotifier.loadProjects();
-              projectsNotifier.selectProject(null);
-            },
+            onTap: () => projectsNotifier.selectProject(null),
           ),
           _PanelItem(
             icon: Icons.add_circle_outline,
             title: 'Создать проект',
-            onTap: () async {
-              await projectsNotifier.loadProjects();
-              projectsNotifier.selectProject(null);
-            },
+            onTap: () => projectsNotifier.selectProject(null),
           ),
           const SizedBox(height: 12),
           const _PanelHeader(title: 'Недавние'),

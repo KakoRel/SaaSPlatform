@@ -50,10 +50,6 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
       final projects = projectsData.map((data) => Project.fromJson(data)).toList();
       state = state.copyWith(projects: projects, isLoading: false);
 
-      // If only one project exists, auto-select it
-      if (projects.length == 1 && state.selectedProjectId == null) {
-        selectProject(projects.first.id);
-      }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
