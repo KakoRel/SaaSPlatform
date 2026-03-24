@@ -132,10 +132,8 @@ class KanbanBoardWrapper extends StatelessWidget {
       final collaborationBoardId =
           boardsState.boards.isNotEmpty ? boardsState.boards.first.id : null;
 
-      final loadedForCurrentProject =
-          boardsState.boards.isNotEmpty && boardsState.boards.first.projectId == selectedProject.id;
-      if (!boardsState.isLoading &&
-          (!loadedForCurrentProject || boardsState.boards.isEmpty)) {
+      final needBoardsLoad = boardsState.loadedProjectId != selectedProject.id;
+      if (!boardsState.isLoading && needBoardsLoad) {
         Future.microtask(() => boardsNotifier.loadBoards(selectedProject.id));
       }
       
@@ -183,14 +181,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                   icon: const Icon(Icons.video_call_outlined),
                   tooltip: 'Видеозвонок проекта',
                   onPressed: () async {
-                final boardId = collaborationBoardId;
-                if (boardId == null) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Создайте доску для видеозвонка проекта')),
-                  );
-                  return;
-                }
+                if (!context.mounted) return;
 
                 final displayName = authState.user?.fullName ??
                     authState.user?.email ??
@@ -199,7 +190,7 @@ class KanbanBoardWrapper extends StatelessWidget {
                 try {
                   final res = await showVideoCallEntryDialog(
                     context: context,
-                    boardId: boardId,
+                    projectId: selectedProject.id,
                     displayName: displayName,
                   );
                   if (res == null) return;
@@ -209,7 +200,6 @@ class KanbanBoardWrapper extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => VideoCallRoomScreen(
-                        boardId: boardId,
                         roomId: res.roomId,
                         audioDeviceId: res.audioDeviceId,
                         videoDeviceId: res.videoDeviceId,

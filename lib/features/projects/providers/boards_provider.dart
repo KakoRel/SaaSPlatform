@@ -7,18 +7,21 @@ class BoardsState {
   const BoardsState({
     this.boards = const [],
     this.selectedBoardId,
+    this.loadedProjectId,
     this.isLoading = false,
     this.error,
   });
 
   final List<ProjectBoard> boards;
   final String? selectedBoardId;
+  final String? loadedProjectId;
   final bool isLoading;
   final String? error;
 
   BoardsState copyWith({
     List<ProjectBoard>? boards,
     String? selectedBoardId,
+    String? loadedProjectId,
     bool? isLoading,
     String? error,
     bool clearError = false,
@@ -27,6 +30,7 @@ class BoardsState {
     return BoardsState(
       boards: boards ?? this.boards,
       selectedBoardId: clearSelectedBoard ? null : (selectedBoardId ?? this.selectedBoardId),
+      loadedProjectId: loadedProjectId ?? this.loadedProjectId,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
     );
@@ -38,8 +42,23 @@ class BoardsNotifier extends StateNotifier<BoardsState> {
 
   final SupabaseClientService _supabase;
 
-  Future<void> loadBoards(String projectId) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  Future<void> loadBoards(String projectId, {bool force = false}) async {
+    if (!force && state.isLoading && state.loadedProjectId == projectId) {
+      return;
+    }
+    if (!force &&
+        !state.isLoading &&
+        state.loadedProjectId == projectId &&
+        state.error == null) {
+      return;
+    }
+
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      loadedProjectId: projectId,
+      clearSelectedBoard: true,
+    );
     try {
       final rows = await _supabase.fetchList<Map<String, dynamic>>(
         tableName: 'project_boards',
@@ -61,13 +80,42 @@ class BoardsNotifier extends StateNotifier<BoardsState> {
       state = state.copyWith(
         boards: visibleBoards,
         selectedBoardId: selectedBoardId,
+        loadedProjectId: projectId,
         isLoading: false,
       );
     } catch (e) {
       state = state.copyWith(
+        loadedProjectId: projectId,
         isLoading: false,
         error: e.toString(),
       );
+    }
+  }
+
+  Future<String?> ensureProjectCommunicationBoard(String projectId) async {
+    if (state.loadedProjectId != projectId) {
+      await loadBoards(projectId);
+    }
+    if (state.boards.isNotEmpty) {
+      return state.boards.first.id;
+    }
+
+    try {
+      final created = await _supabase.insert<Map<String, dynamic>>(
+        tableName: 'boards',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'name': 'Общая коммуникация',
+          'created_by': _supabase.currentUserId,
+        },
+      );
+
+      await loadBoards(projectId, force: true);
+      return created['id']?.toString() ??
+          (state.boards.isNotEmpty ? state.boards.first.id : null);
+    } catch (_) {
+      return null;
     }
   }
 

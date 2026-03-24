@@ -17,7 +17,7 @@ class VideoCallJoinResult {
 
 Future<VideoCallJoinResult?> showVideoCallEntryDialog({
   required BuildContext context,
-  required String boardId,
+  required String projectId,
   required String displayName,
 }) async {
   // Context may become invalid while we await network/devices calls.
@@ -27,11 +27,11 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
   final currentUserId = SupabaseClientService.instance.currentUserId;
   if (currentUserId == null) return null;
 
-  // Existing room (latest) for this board
+  // Existing room (latest) for this project
   final roomQuery = await client
       .from('video_call_rooms')
       .select('id,created_at')
-      .eq('board_id', boardId)
+      .eq('project_id', projectId)
       .order('created_at', ascending: false)
       .limit(1)
       .maybeSingle();
@@ -187,7 +187,7 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
                       final createdRoom = await client
                           .from('video_call_rooms')
                           .insert({
-                            'board_id': boardId,
+                            'project_id': projectId,
                             'created_by': currentUserId,
                           })
                           .select('id')

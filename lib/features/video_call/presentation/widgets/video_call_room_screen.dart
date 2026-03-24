@@ -9,13 +9,11 @@ import '../../../../core/services/supabase_client.dart';
 class VideoCallRoomScreen extends StatefulWidget {
   const VideoCallRoomScreen({
     super.key,
-    required this.boardId,
     required this.roomId,
     required this.audioDeviceId,
     required this.videoDeviceId,
   });
 
-  final String boardId;
   final String roomId;
   final String? audioDeviceId;
   final String? videoDeviceId;

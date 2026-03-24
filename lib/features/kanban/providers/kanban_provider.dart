@@ -81,6 +81,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       return;
     }
 
+    // Guard against rapid duplicate reloads for the same board/project.
+    if (state.isLoading &&
+        state.currentProjectId == projectId &&
+        state.currentBoardId == boardId) {
+      return;
+    }
+
     state = state.copyWith(
       isLoading: true,
       clearError: true,

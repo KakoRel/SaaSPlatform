@@ -1,60 +1,46 @@
 -- ========================================
--- Video Call Rooms (per project) + Signaling
+-- Migrate video calls from board-level to project-level
 -- ========================================
 
--- Required helper (already created in core project migrations):
--- public.is_project_member_by_project(project_uuid uuid)
+-- 1) Add project_id to rooms
+ALTER TABLE public.video_call_rooms
+  ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE;
 
--- 1) Rooms
-CREATE TABLE IF NOT EXISTS public.video_call_rooms (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
+-- 2) Backfill project_id from board_id
+UPDATE public.video_call_rooms r
+SET project_id = b.project_id
+FROM public.boards b
+WHERE r.project_id IS NULL
+  AND r.board_id = b.id;
 
--- 2) Participants
-CREATE TABLE IF NOT EXISTS public.video_call_participants (
-  room_id UUID NOT NULL REFERENCES public.video_call_rooms(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  display_name TEXT NOT NULL,
-  joined_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  left_at TIMESTAMPTZ,
-  PRIMARY KEY (room_id, user_id)
-);
+-- 3) Ensure index and NOT NULL after backfill
+CREATE INDEX IF NOT EXISTS idx_video_call_rooms_project_id
+  ON public.video_call_rooms(project_id);
 
--- 3) Signals (offer/answer/ice)
-CREATE TABLE IF NOT EXISTS public.video_call_signals (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  room_id UUID NOT NULL REFERENCES public.video_call_rooms(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  target_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  signal_type TEXT NOT NULL CHECK (signal_type IN ('offer', 'answer', 'ice')),
-  payload JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'video_call_rooms'
+      AND column_name = 'project_id'
+      AND is_nullable = 'YES'
+  ) THEN
+    -- Safe to enforce when all rows are backfilled
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.video_call_rooms
+      WHERE project_id IS NULL
+    ) THEN
+      ALTER TABLE public.video_call_rooms
+        ALTER COLUMN project_id SET NOT NULL;
+    END IF;
+  END IF;
+END
+$$;
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_video_call_rooms_project_id ON public.video_call_rooms(project_id);
-CREATE INDEX IF NOT EXISTS idx_video_call_participants_room_id ON public.video_call_participants(room_id);
-CREATE INDEX IF NOT EXISTS idx_video_call_signals_room_target
-  ON public.video_call_signals(room_id, target_id, created_at);
-
--- Keep updated_at in sync
-DROP TRIGGER IF EXISTS handle_video_call_rooms_updated_at ON public.video_call_rooms;
-CREATE TRIGGER handle_video_call_rooms_updated_at
-  BEFORE UPDATE ON public.video_call_rooms
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
-
--- Enable RLS
-ALTER TABLE public.video_call_rooms ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.video_call_participants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.video_call_signals ENABLE ROW LEVEL SECURITY;
-
--- =========================
--- RLS: video_call_rooms
--- =========================
+-- 4) RLS for rooms (project-level)
 DROP POLICY IF EXISTS "Call room members can view rooms" ON public.video_call_rooms;
 CREATE POLICY "Call room members can view rooms"
   ON public.video_call_rooms FOR SELECT
@@ -71,11 +57,12 @@ CREATE POLICY "Call room members can create rooms"
 DROP POLICY IF EXISTS "Call room creator can delete rooms" ON public.video_call_rooms;
 CREATE POLICY "Call room creator can delete rooms"
   ON public.video_call_rooms FOR DELETE
-  USING (created_by = auth.uid());
+  USING (
+    created_by = auth.uid()
+    AND public.is_project_member_by_project(project_id)
+  );
 
--- =========================
--- RLS: participants
--- =========================
+-- 5) RLS for participants (project-level via room.project_id)
 DROP POLICY IF EXISTS "Call room members can view participants" ON public.video_call_participants;
 CREATE POLICY "Call room members can view participants"
   ON public.video_call_participants FOR SELECT
@@ -114,9 +101,7 @@ CREATE POLICY "Users can leave call rooms"
     )
   );
 
--- =========================
--- RLS: signals
--- =========================
+-- 6) RLS for signals (project-level via room.project_id)
 DROP POLICY IF EXISTS "Call room members can view signals" ON public.video_call_signals;
 CREATE POLICY "Call room members can view signals"
   ON public.video_call_signals FOR SELECT
@@ -142,4 +127,3 @@ CREATE POLICY "Call room members can insert signals"
         AND public.is_project_member_by_project(r.project_id)
     )
   );
-
