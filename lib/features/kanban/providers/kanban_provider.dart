@@ -124,7 +124,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         for (final status in TaskStatus.values) status: [],
       };
 
-      for (final task in tasks.where((t) => t.sprintId == activeSprintId)) {
+      for (final task in tasks.where(
+        (t) => t.sprintId == activeSprintId || t.issueType == TaskIssueType.epic,
+      )) {
         tasksByStatus[task.status]!.add(task);
       }
 
