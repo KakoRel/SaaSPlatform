@@ -8,6 +8,7 @@ import 'features/projects/domain/entities/project.dart';
 import 'features/projects/providers/projects_provider.dart';
 import 'features/projects/providers/boards_provider.dart';
 import 'features/projects/presentation/pages/project_selection_screen.dart';
+import 'features/projects/presentation/widgets/project_members_dialog.dart';
 import 'features/analytics/presentation/pages/analytics_screen.dart';
 import 'features/analytics/presentation/pages/global_analytics_screen.dart';
 import 'shared/presentation/widgets/app_sidebar.dart';
@@ -126,8 +127,10 @@ class KanbanBoardWrapper extends StatelessWidget {
       final boardsState = ref.watch(boardsProvider);
       final boardsNotifier = ref.read(boardsProvider.notifier);
       final authState = ref.watch(authNotifierProvider);
-      final collaborationBoardId = boardsState.selectedBoardId ??
-          (boardsState.boards.isNotEmpty ? boardsState.boards.first.id : null);
+      // Единый коммуникационный контур на уровне проекта
+      // (не зависит от выбранной доски в текущей вкладке).
+      final collaborationBoardId =
+          boardsState.boards.isNotEmpty ? boardsState.boards.first.id : null;
 
       final loadedForCurrentProject =
           boardsState.boards.isNotEmpty && boardsState.boards.first.projectId == selectedProject.id;
@@ -171,7 +174,10 @@ class KanbanBoardWrapper extends StatelessWidget {
               actions: [
                 const NotificationBell(),
                 const SizedBox(width: 8),
-                BoardChatButton(boardId: collaborationBoardId),
+                BoardChatButton(
+                  projectId: selectedProject.id,
+                  boardId: collaborationBoardId,
+                ),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.video_call_outlined),
@@ -232,6 +238,10 @@ class KanbanBoardWrapper extends StatelessWidget {
                   icon: const Icon(Icons.settings_outlined),
                   tooltip: 'Управление проектом',
                   itemBuilder: (context) => [
+                    const PopupMenuItem<int>(
+                      value: 3,
+                      child: Text('Участники проекта'),
+                    ),
                     if (!isOwner)
                       const PopupMenuItem<int>(
                         value: 1,
@@ -247,7 +257,12 @@ class KanbanBoardWrapper extends StatelessWidget {
                 final notifier = ref.read(projectsProvider.notifier);
 
                 try {
-                  if (value == 1) {
+                  if (value == 3) {
+                    await showDialog<void>(
+                      context: context,
+                      builder: (_) => ProjectMembersDialog(projectId: selectedProject.id),
+                    );
+                  } else if (value == 1) {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(

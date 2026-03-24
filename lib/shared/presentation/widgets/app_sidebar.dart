@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../features/projects/providers/projects_provider.dart';
-import '../../../features/projects/presentation/widgets/project_members_dialog.dart';
 import 'package:saas_platform/features/auth/providers/auth_provider.dart';
 import 'package:saas_platform/features/settings/presentation/pages/settings_screen.dart';
 import 'package:saas_platform/features/analytics/presentation/pages/global_analytics_screen.dart';
@@ -40,25 +39,11 @@ class AppSidebar extends ConsumerWidget {
                     _showCreateProjectDialog(context, ref);
                   },
                 ),
-                if (selectedProject != null) ...[
+                if (selectedProject != null)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Divider(color: Colors.white10),
                   ),
-                  _buildSectionHeader('НАСТРОЙКИ'),
-                  _buildActionItem(
-                    context,
-                    icon: Icons.people_outline_rounded,
-                    label: 'Участники Проекта',
-                    onTap: () {
-                      Navigator.pop(context);
-                      showDialog(
-                        context: context,
-                        builder: (context) => ProjectMembersDialog(projectId: selectedProject.id),
-                      );
-                    },
-                  ),
-                ],
               ],
             ),
           ),

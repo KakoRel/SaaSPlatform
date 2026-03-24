@@ -68,7 +68,7 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
           final primaryActionLabel = canJoinExisting ? 'Подключиться' : 'Создать новый';
 
           return AlertDialog(
-            title: const Text('Звонок по доске'),
+            title: const Text('Видеозвонок проекта'),
             content: SizedBox(
               width: 520,
               child: Column(

@@ -89,6 +89,9 @@ class _BacklogTabState extends ConsumerState<BacklogTab> {
                   children: [
                     Expanded(
                       child: _TaskLane(
+                        key: ValueKey(
+                          'backlog_${widget.projectId}_${widget.boardId ?? 'main'}_$_reloadKey',
+                        ),
                         title: 'Бэклог',
                         subtitle: 'Без спринта',
                         loadTasks: () => notifier.getBacklogTasks(
@@ -106,6 +109,7 @@ class _BacklogTabState extends ConsumerState<BacklogTab> {
                       child: planningSprint == null
                           ? const _EmptySprintLane()
                           : _TaskLane(
+                              key: ValueKey('sprint_${planningSprint['id']}_$_reloadKey'),
                               title: 'Планирование спринта',
                               subtitle: planningSprint['name']?.toString() ?? 'Спринт',
                               loadTasks: () {
@@ -238,8 +242,9 @@ class _BacklogHeader extends StatelessWidget {
   }
 }
 
-class _TaskLane extends StatelessWidget {
+class _TaskLane extends StatefulWidget {
   const _TaskLane({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.loadTasks,
@@ -250,6 +255,19 @@ class _TaskLane extends StatelessWidget {
   final String subtitle;
   final Future<List<Task>> Function() loadTasks;
   final Future<void> Function(String taskId) onDropTask;
+
+  @override
+  State<_TaskLane> createState() => _TaskLaneState();
+}
+
+class _TaskLaneState extends State<_TaskLane> {
+  late Future<List<Task>> _tasksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _tasksFuture = widget.loadTasks();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -267,18 +285,18 @@ class _TaskLane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                Text(widget.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(widget.subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
           Expanded(
             child: DragTarget<String>(
-              onAcceptWithDetails: (details) => onDropTask(details.data),
+              onAcceptWithDetails: (details) => widget.onDropTask(details.data),
               builder: (context, candidateData, rejectedData) {
                 return FutureBuilder<List<Task>>(
-                  future: loadTasks(),
+                  future: _tasksFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator(strokeWidth: 2));

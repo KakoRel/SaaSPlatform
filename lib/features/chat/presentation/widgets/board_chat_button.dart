@@ -7,9 +7,11 @@ import '../../../../core/services/supabase_client.dart';
 class BoardChatButton extends StatefulWidget {
   const BoardChatButton({
     super.key,
-    required this.boardId,
+    required this.projectId,
+    this.boardId,
   });
 
+  final String projectId;
   final String? boardId;
 
   @override
@@ -17,95 +19,7 @@ class BoardChatButton extends StatefulWidget {
 }
 
 class _BoardChatButtonState extends State<BoardChatButton> {
-  int _unreadCount = 0;
-  Timer? _pollTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _schedulePolling();
-  }
-
-  @override
-  void didUpdateWidget(covariant BoardChatButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.boardId != widget.boardId) {
-      _refreshUnread();
-    }
-  }
-
-  void _schedulePolling() {
-    _refreshUnread();
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshUnread());
-  }
-
-  Future<void> _refreshUnread() async {
-    final boardId = widget.boardId;
-    final userId = SupabaseClientService.instance.currentUserId;
-    if (!mounted) return;
-    if (boardId == null || userId == null) {
-      setState(() => _unreadCount = 0);
-      return;
-    }
-
-    final client = SupabaseClientService.instance.client;
-    final readState = await client
-        .from('board_chat_reads')
-        .select('last_read_at')
-        .eq('board_id', boardId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    final lastRead = DateTime.tryParse(readState?['last_read_at']?.toString() ?? '');
-
-    final allMessages = await client
-        .from('board_chat_messages')
-        .select('id,user_id,created_at')
-        .eq('board_id', boardId)
-        .order('created_at', ascending: false)
-        .limit(200);
-
-    final unread = (allMessages as List)
-        .whereType<Map<String, dynamic>>()
-        .where((m) {
-          if (m['user_id']?.toString() == userId) return false;
-          final createdAt = DateTime.tryParse(m['created_at']?.toString() ?? '');
-          if (createdAt == null) return false;
-          if (lastRead == null) return true;
-          return createdAt.isAfter(lastRead);
-        })
-        .length;
-
-    if (!mounted) return;
-    setState(() => _unreadCount = unread);
-  }
-
-  Future<void> _markAsRead() async {
-    final boardId = widget.boardId;
-    final userId = SupabaseClientService.instance.currentUserId;
-    if (boardId == null || userId == null) return;
-    final client = SupabaseClientService.instance.client;
-    await client.from('board_chat_reads').upsert({
-      'board_id': boardId,
-      'user_id': userId,
-      'last_read_at': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-
   Future<void> _openChatPanel() async {
-    final boardId = widget.boardId;
-    if (boardId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Выберите доску для чата')),
-      );
-      return;
-    }
-
-    await _markAsRead();
-    if (mounted) setState(() => _unreadCount = 0);
-
     if (!mounted) return;
     await showGeneralDialog<void>(
       context: context,
@@ -114,7 +28,10 @@ class _BoardChatButtonState extends State<BoardChatButton> {
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (context, animation, secondaryAnimation) {
-        return _BoardChatPanel(boardId: boardId);
+        return _BoardChatPanel(
+          projectId: widget.projectId,
+          boardIdFallback: widget.boardId,
+        );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final offset = Tween<Offset>(
@@ -124,49 +41,26 @@ class _BoardChatButtonState extends State<BoardChatButton> {
         return SlideTransition(position: offset, child: child);
       },
     );
-
-    await _markAsRead();
-    await _refreshUnread();
-  }
-
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.chat_bubble_outline),
-          tooltip: 'Чат доски',
-          onPressed: _openChatPanel,
-        ),
-        if (_unreadCount > 0)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-      ],
+    return IconButton(
+      icon: const Icon(Icons.chat_bubble_outline),
+      tooltip: 'Чат проекта',
+      onPressed: _openChatPanel,
     );
   }
 }
 
 class _BoardChatPanel extends StatefulWidget {
-  const _BoardChatPanel({required this.boardId});
+  const _BoardChatPanel({
+    required this.projectId,
+    this.boardIdFallback,
+  });
 
-  final String boardId;
+  final String projectId;
+  final String? boardIdFallback;
 
   @override
   State<_BoardChatPanel> createState() => _BoardChatPanelState();
@@ -198,14 +92,29 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
 
   Future<List<Map<String, dynamic>>> _loadMessages() async {
     final client = SupabaseClientService.instance.client;
-    final messages = await client
-        .from('board_chat_messages')
-        .select('id, message, created_at, user_id')
-        .eq('board_id', widget.boardId)
-        .order('created_at', ascending: true)
-        .limit(300);
+    List<Map<String, dynamic>> list = [];
 
-    final list = (messages as List).whereType<Map<String, dynamic>>().toList();
+    try {
+      final projectMessages = await client
+          .from('department_chat_messages')
+          .select('id, message, created_at, user_id')
+          .eq('project_id', widget.projectId)
+          .isFilter('department_id', null)
+          .order('created_at', ascending: true)
+          .limit(300);
+      list = (projectMessages as List).whereType<Map<String, dynamic>>().toList();
+    } catch (_) {
+      final boardId = widget.boardIdFallback;
+      if (boardId == null) return [];
+      final boardMessages = await client
+          .from('board_chat_messages')
+          .select('id, message, created_at, user_id')
+          .eq('board_id', boardId)
+          .order('created_at', ascending: true)
+          .limit(300);
+      list = (boardMessages as List).whereType<Map<String, dynamic>>().toList();
+    }
+
     final userIds = list
         .map((m) => m['user_id']?.toString() ?? '')
         .where((id) => id.isNotEmpty)
@@ -269,11 +178,23 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
     final userId = SupabaseClientService.instance.currentUserId;
     if (userId == null) return;
 
-    await SupabaseClientService.instance.client.from('board_chat_messages').insert({
-      'board_id': widget.boardId,
-      'user_id': userId,
-      'message': text,
-    });
+    final client = SupabaseClientService.instance.client;
+    try {
+      await client.from('department_chat_messages').insert({
+        'project_id': widget.projectId,
+        'department_id': null,
+        'user_id': userId,
+        'message': text,
+      });
+    } catch (_) {
+      final boardId = widget.boardIdFallback;
+      if (boardId == null) return;
+      await client.from('board_chat_messages').insert({
+        'board_id': boardId,
+        'user_id': userId,
+        'message': text,
+      });
+    }
     _controller.clear();
     await _reloadMessages(silent: true);
     _scheduleAutoScrollToBottom();
@@ -323,7 +244,7 @@ class _BoardChatPanelState extends State<_BoardChatPanel> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Чат доски',
+                          'Чат проекта',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                         ),
                       ),

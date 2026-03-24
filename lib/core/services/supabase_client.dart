@@ -147,7 +147,8 @@ class SupabaseClientService {
   }) async {
     final client = _requireClient();
     try {
-      var query = client.from(tableName).select(select ?? '*');
+      final base = client.from(tableName);
+      var query = select == null ? base.select() : base.select(select);
 
       if (filters != null) {
         query = _applyFilters(query, filters);
@@ -156,8 +157,14 @@ class SupabaseClientService {
       // Build the final query with transforms applied at the end
       PostgrestTransformBuilder<PostgrestList> transformed = query;
 
-      if (orderBy != null) {
-        transformed = query.order(orderBy.first.column, ascending: orderBy.first.ascending);
+      if (orderBy != null && orderBy.isNotEmpty) {
+        transformed = transformed.order(
+          orderBy.first.column,
+          ascending: orderBy.first.ascending,
+        );
+        for (final extra in orderBy.skip(1)) {
+          transformed = transformed.order(extra.column, ascending: extra.ascending);
+        }
       }
 
       if (limit != null) {
@@ -185,7 +192,8 @@ class SupabaseClientService {
   }) async {
     final client = _requireClient();
     try {
-      var query = client.from(tableName).select(select ?? '*');
+      final base = client.from(tableName);
+      var query = select == null ? base.select() : base.select(select);
 
       if (filters != null) {
         query = _applyFilters(query, filters);
@@ -208,7 +216,10 @@ class SupabaseClientService {
   }) async {
     final client = _requireClient();
     try {
-      final response = await client.from(tableName).insert(data).select(select ?? '*').single();
+      final insertBuilder = client.from(tableName).insert(data);
+      final response = await (select == null
+          ? insertBuilder.select().single()
+          : insertBuilder.select(select).single());
       return fromJson(response);
     } on PostgrestException catch (e) {
       throw ServerException('Insert operation failed: ${e.message}');
@@ -226,12 +237,13 @@ class SupabaseClientService {
   }) async {
     final client = _requireClient();
     try {
-      final response = await client
+      final updateBuilder = client
           .from(tableName)
           .update(data)
-          .eq('id', id)
-          .select(select ?? '*')
-          .single();
+          .eq('id', id);
+      final response = await (select == null
+          ? updateBuilder.select().single()
+          : updateBuilder.select(select).single());
       return fromJson(response);
     } on PostgrestException catch (e) {
       throw ServerException('Update operation failed: ${e.message}');
@@ -281,7 +293,9 @@ class SupabaseClientService {
     try {
       var query = client.from(tableName).update(data);
       query = _applyFilters(query, filters);
-      final response = await query.select(select ?? '*').maybeSingle();
+      final response = await (select == null
+          ? query.select().maybeSingle()
+          : query.select(select).maybeSingle());
       return response != null ? fromJson(response) : null;
     } on PostgrestException catch (e) {
       throw ServerException('Update operation failed: ${e.message}');
