@@ -828,6 +828,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         },
         fromJson: (json) => json,
       );
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -885,6 +888,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         data: updateData,
         fromJson: (json) => json,
       );
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -911,6 +917,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   Future<void> deleteTask(String taskId) async {
     try {
       await _supabaseService.delete(tableName: 'tasks', id: taskId);
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }

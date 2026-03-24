@@ -14,11 +14,13 @@ class KanbanBoardWidget extends ConsumerStatefulWidget {
     super.key,
     required this.projectId,
     this.boardId,
+    this.searchQuery = '',
     this.onNavigateToBacklog,
   });
 
   final String projectId;
   final String? boardId;
+  final String searchQuery;
   final VoidCallback? onNavigateToBacklog;
 
   @override
@@ -39,6 +41,8 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchQuery = widget.searchQuery;
+    _searchController.text = widget.searchQuery;
     // Load tasks on init
     Future.microtask(() {
       ref.read(kanbanProvider.notifier).loadTasks(
@@ -51,6 +55,12 @@ class _KanbanBoardWidgetState extends ConsumerState<KanbanBoardWidget> {
   @override
   void didUpdateWidget(covariant KanbanBoardWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchQuery != widget.searchQuery) {
+      _searchQuery = widget.searchQuery;
+      if (_searchController.text != widget.searchQuery) {
+        _searchController.text = widget.searchQuery;
+      }
+    }
     if (oldWidget.projectId != widget.projectId || oldWidget.boardId != widget.boardId) {
       ref.read(kanbanProvider.notifier).loadTasks(
             widget.projectId,

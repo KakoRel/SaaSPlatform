@@ -56,6 +56,10 @@ class ProjectsNotifier extends StateNotifier<ProjectsState> {
   }
 
   void selectProject(String? projectId) {
+    if (projectId == null) {
+      state = state.copyWith(clearSelectedProject: true);
+      return;
+    }
     state = state.copyWith(selectedProjectId: projectId);
   }
 

@@ -125,6 +125,14 @@ class KanbanBoardWrapper extends ConsumerStatefulWidget {
 
 class _KanbanBoardWrapperState extends ConsumerState<KanbanBoardWrapper> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController _boardSearchController = TextEditingController();
+  String _boardSearchQuery = '';
+
+  @override
+  void dispose() {
+    _boardSearchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -383,8 +391,12 @@ class _KanbanBoardWrapperState extends ConsumerState<KanbanBoardWrapper> {
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                 child: Row(
                                   children: [
-                                    const Expanded(
+                                    Expanded(
                                       child: TextField(
+                                        controller: _boardSearchController,
+                                        onChanged: (value) {
+                                          setState(() => _boardSearchQuery = value);
+                                        },
                                         decoration: InputDecoration(
                                           hintText: 'Поиск на доске',
                                           isDense: true,
@@ -450,6 +462,7 @@ class _KanbanBoardWrapperState extends ConsumerState<KanbanBoardWrapper> {
                                   child: KanbanBoardWidget(
                                     projectId: widget.selectedProject.id,
                                     boardId: boardsState.selectedBoardId,
+                                    searchQuery: _boardSearchQuery,
                                     onNavigateToBacklog: () => DefaultTabController.of(context).animateTo(1),
                                   ),
                                 ),
@@ -2020,23 +2033,7 @@ class _ProjectTopBar extends StatelessWidget {
             projectName,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Поиск',
-                  isDense: true,
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Color(0xFF2B2D31),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
+          const Spacer(),
           FilledButton.icon(
             onPressed: onCreatePressed,
             icon: const Icon(Icons.add, size: 18),
@@ -2115,9 +2112,6 @@ class _JiraLikeLeftPanel extends ConsumerWidget {
               );
             },
           ),
-          const SizedBox(height: 12),
-          const _PanelHeader(title: 'Рекомендуется'),
-          const _PanelItem(icon: Icons.lightbulb_outline, title: 'Планы релизов'),
         ],
       ),
     );
