@@ -23,6 +23,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
   late TaskPriority _priority;
   late TaskStatus _status;
   String? _assigneeId;
+  String? _sprintId;
   DateTime? _dueDate;
   
   Uint8List? _imageBytes;
@@ -38,6 +39,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     _priority = widget.task?.priority ?? TaskPriority.medium;
     _status = widget.task?.status ?? widget.initialStatus ?? TaskStatus.todo;
     _assigneeId = widget.task?.assigneeId;
+    _sprintId = widget.task?.sprintId;
     _dueDate = widget.task?.dueDate;
     _currentImageUrl = widget.task?.imageUrl;
   }
@@ -114,6 +116,29 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       }),
                     ],
                     onChanged: (val) => setState(() => _assigneeId = val),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: selectedProject != null
+                    ? ref.read(kanbanProvider.notifier).getProjectSprints(selectedProject.id)
+                    : Future.value([]),
+                builder: (context, snapshot) {
+                  final sprints = snapshot.data ?? [];
+                  return DropdownButtonFormField<String?>(
+                    initialValue: _sprintId,
+                    decoration: const InputDecoration(labelText: 'Спринт'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('Без спринта')),
+                      ...sprints.map(
+                        (s) => DropdownMenuItem<String?>(
+                          value: s['id'] as String?,
+                          child: Text((s['name'] as String?) ?? 'Спринт'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setState(() => _sprintId = val),
                   );
                 },
               ),
@@ -244,6 +269,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
           description: _descriptionController.text.trim(),
           priority: _priority,
           assigneeId: _assigneeId,
+          sprintId: _sprintId ?? '',
           dueDate: _dueDate,
           imageUrl: imageUrl,
         );
@@ -254,6 +280,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
           description: _descriptionController.text.trim(),
           priority: _priority,
           assigneeId: _assigneeId,
+          sprintId: _sprintId ?? '',
           dueDate: _dueDate,
           status: _status,
           imageUrl: imageUrl,

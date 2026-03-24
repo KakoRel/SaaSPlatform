@@ -452,7 +452,6 @@ class KanbanBoardWrapper extends StatelessWidget {
                             ],
                           ),
                           _TimelineTab(
-                            kanbanState: kanbanState,
                             projectId: selectedProject.id,
                           ),
                           _PagesTab(projectId: selectedProject.id),
@@ -555,22 +554,27 @@ class _MetricCard extends StatelessWidget {
 
 class _TimelineTab extends ConsumerWidget {
   const _TimelineTab({
-    required this.kanbanState,
     required this.projectId,
   });
 
-  final KanbanState kanbanState;
   final String projectId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(kanbanProvider.notifier);
-    final visibleTasks = kanbanState.tasksByStatus.values.expand((list) => list).toList();
-
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: notifier.getProjectSprints(projectId),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        notifier.getProjectSprints(projectId),
+        notifier.getProjectTasksForTimeline(projectId),
+      ]),
       builder: (context, snapshot) {
-        final sprints = snapshot.data ?? [];
+        final payload = snapshot.data;
+        final sprints = payload != null && payload.isNotEmpty
+            ? (payload[0] as List<Map<String, dynamic>>)
+            : <Map<String, dynamic>>[];
+        final visibleTasks = payload != null && payload.length > 1
+            ? (payload[1] as List<Task>)
+            : <Task>[];
         final sortedSprints = [...sprints]
           ..sort((a, b) {
             final aDate = DateTime.tryParse((a['start_date'] as String?) ?? '') ??
@@ -2098,7 +2102,7 @@ class _QuickCreateIssueDialogState extends ConsumerState<_QuickCreateIssueDialog
                     priority: _priority,
                     issueType: _issueType,
                     epicId: _issueType == TaskIssueType.epic ? null : _epicId,
-                    sprintId: _sprintId,
+                    sprintId: _sprintId ?? '',
                   );
                   if (!mounted) return;
                   navigator.pop(true);

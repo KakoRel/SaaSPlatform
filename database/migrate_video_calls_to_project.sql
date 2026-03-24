@@ -40,6 +40,23 @@ BEGIN
 END
 $$;
 
+-- 3.1) Make legacy board_id optional after migration
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'video_call_rooms'
+      AND column_name = 'board_id'
+      AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE public.video_call_rooms
+      ALTER COLUMN board_id DROP NOT NULL;
+  END IF;
+END
+$$;
+
 -- 4) RLS for rooms (project-level)
 DROP POLICY IF EXISTS "Call room members can view rooms" ON public.video_call_rooms;
 CREATE POLICY "Call room members can view rooms"

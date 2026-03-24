@@ -67,8 +67,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
   RealtimeChannel? _tasksChannel;
   Timer? _debounceTimer;
   Timer? _realtimeReloadDebounceTimer;
+  DateTime? _lastRealtimeReloadAt;
 
-  Future<void> loadTasks(String projectId, {String? boardId}) async {
+  Future<void> loadTasks(
+    String projectId, {
+    String? boardId,
+    bool fromRealtime = false,
+  }) async {
     final isUuid = RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     ).hasMatch(projectId);
@@ -86,6 +91,12 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         state.currentProjectId == projectId &&
         state.currentBoardId == boardId) {
       return;
+    }
+    if (fromRealtime && _lastRealtimeReloadAt != null) {
+      final since = DateTime.now().difference(_lastRealtimeReloadAt!);
+      if (since.inMilliseconds < 1800) {
+        return;
+      }
     }
 
     state = state.copyWith(
@@ -127,6 +138,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         activeSprintId: activeSprintId,
         isDemoData: false,
       );
+      if (fromRealtime) {
+        _lastRealtimeReloadAt = DateTime.now();
+      }
 
       _setupRealtimeSubscription(projectId, boardId: boardId);
     } on AuthorizationException {
@@ -247,14 +261,17 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     DateTime? endDate,
   }) async {
     try {
+      final now = DateTime.now();
+      final resolvedStart = startDate ?? now;
+      final resolvedEnd = endDate ?? resolvedStart.add(const Duration(days: 14));
       return await _supabaseService.insert<Map<String, dynamic>>(
         tableName: 'sprints',
         fromJson: (json) => json,
         data: {
           'project_id': projectId,
           'name': name,
-          'start_date': startDate?.toIso8601String(),
-          'end_date': endDate?.toIso8601String(),
+          'start_date': resolvedStart.toIso8601String(),
+          'end_date': resolvedEnd.toIso8601String(),
           'status': 'planned',
           'is_active': false,
           'created_by': _supabaseService.currentUserId,
@@ -280,14 +297,27 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       for (final sprint in sprints) {
         final id = sprint['id'] as String?;
         if (id == null) continue;
+        final now = DateTime.now();
+        final rawStart = sprint['start_date']?.toString();
+        final rawEnd = sprint['end_date']?.toString();
+        final currentStart = DateTime.tryParse(rawStart ?? '');
+        final currentEnd = DateTime.tryParse(rawEnd ?? '');
+        final isTarget = id == sprintId;
+        final data = <String, dynamic>{
+          'is_active': isTarget,
+          'status': isTarget ? 'active' : sprint['status'],
+        };
+        if (isTarget && currentStart == null) {
+          data['start_date'] = now.toIso8601String();
+        }
+        if (isTarget && currentEnd == null) {
+          data['end_date'] = now.add(const Duration(days: 14)).toIso8601String();
+        }
         await _supabaseService.update<Map<String, dynamic>>(
           tableName: 'sprints',
           id: id,
           fromJson: (json) => json,
-          data: {
-            'is_active': id == sprintId,
-            'status': id == sprintId ? 'active' : sprint['status'],
-          },
+          data: data,
         );
       }
 
@@ -477,6 +507,23 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         },
       );
     } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('issue_defaults') || message.contains('project_form_submissions')) {
+        try {
+          return await _supabaseService.insert<Map<String, dynamic>>(
+            tableName: 'project_forms',
+            fromJson: (json) => json,
+            data: {
+              'project_id': projectId,
+              'title': title,
+              'description': description,
+              'fields': fields,
+              'created_by': _supabaseService.currentUserId,
+              'updated_by': _supabaseService.currentUserId,
+            },
+          );
+        } catch (_) {}
+      }
       state = state.copyWith(error: e.toString());
       return null;
     }
@@ -506,6 +553,24 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         data: data,
       );
     } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('issue_defaults')) {
+        final fallbackData = <String, dynamic>{
+          'title': title,
+          'description': description,
+          'updated_by': _supabaseService.currentUserId,
+        };
+        if (fields != null) fallbackData['fields'] = fields;
+        if (isActive != null) fallbackData['is_active'] = isActive;
+        try {
+          return await _supabaseService.update<Map<String, dynamic>>(
+            tableName: 'project_forms',
+            id: id,
+            fromJson: (json) => json,
+            data: fallbackData,
+          );
+        } catch (_) {}
+      }
       state = state.copyWith(error: e.toString());
       return null;
     }
@@ -588,17 +653,22 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         },
       );
 
-      return await _supabaseService.insert<Map<String, dynamic>>(
-        tableName: 'project_form_submissions',
-        fromJson: (json) => json,
-        data: {
-          'project_id': projectId,
-          'form_id': formId,
-          'submitted_by': _supabaseService.currentUserId,
-          'answers': answers,
-          'created_task_id': createdTask['id'],
-        },
-      );
+      try {
+        return await _supabaseService.insert<Map<String, dynamic>>(
+          tableName: 'project_form_submissions',
+          fromJson: (json) => json,
+          data: {
+            'project_id': projectId,
+            'form_id': formId,
+            'submitted_by': _supabaseService.currentUserId,
+            'answers': answers,
+            'created_task_id': createdTask['id'],
+          },
+        );
+      } catch (_) {
+        // Backward compatibility if submissions table isn't migrated yet.
+        return createdTask;
+      }
     } catch (e) {
       state = state.copyWith(error: e.toString());
       return null;
@@ -665,6 +735,26 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     }
   }
 
+  Future<List<Task>> getProjectTasksForTimeline(String projectId) async {
+    try {
+      final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_tasks',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('position', ascending: true)],
+      );
+      return tasksData.map(Task.fromJson).toList();
+    } catch (_) {
+      final tasksData = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'tasks',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('position', ascending: true)],
+      );
+      return tasksData.map(Task.fromJson).toList();
+    }
+  }
+
   void _setupRealtimeSubscription(String projectId, {String? boardId}) {
     _tasksChannel?.unsubscribe();
 
@@ -680,7 +770,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
         // joined fields (assignee_name/email). So we debounce a full reload.
         _realtimeReloadDebounceTimer?.cancel();
         _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-          loadTasks(projectId, boardId: boardId);
+          loadTasks(projectId, boardId: boardId, fromRealtime: true);
         });
       },
     );
@@ -715,7 +805,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
           'priority': priority.name,
           'issue_type': issueType.name,
           'epic_id': epicId,
-          'sprint_id': sprintId ?? state.activeSprintId,
+          'sprint_id': sprintId == '' ? null : (sprintId ?? state.activeSprintId),
           'due_date': dueDate?.toIso8601String(),
           'image_url': imageUrl,
           'position': _getNextPosition(TaskStatus.todo),
@@ -768,7 +858,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       if (priority != null) updateData['priority'] = priority.name;
       if (issueType != null) updateData['issue_type'] = issueType.name;
       if (epicId != null) updateData['epic_id'] = epicId;
-      if (sprintId != null) updateData['sprint_id'] = sprintId;
+      if (sprintId != null) updateData['sprint_id'] = sprintId.isEmpty ? null : sprintId;
       if (dueDate != null) updateData['due_date'] = dueDate.toIso8601String();
       if (status != null) updateData['status'] = status.toDbValue();
       if (imageUrl != null) updateData['image_url'] = imageUrl;

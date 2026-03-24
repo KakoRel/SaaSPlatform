@@ -184,14 +184,58 @@ Future<VideoCallJoinResult?> showVideoCallEntryDialog({
                   try {
                     String actualRoomId = roomId ?? '';
                     if (!canJoinExisting) {
-                      final createdRoom = await client
-                          .from('video_call_rooms')
-                          .insert({
-                            'project_id': projectId,
-                            'created_by': currentUserId,
-                          })
-                          .select('id')
-                          .single();
+                      Map<String, dynamic> createdRoom;
+                      try {
+                        createdRoom = await client
+                            .from('video_call_rooms')
+                            .insert({
+                              'project_id': projectId,
+                              'created_by': currentUserId,
+                            })
+                            .select('id')
+                            .single();
+                      } catch (e) {
+                        // Backward compatibility: old schema may still require board_id NOT NULL.
+                        final message = e.toString().toLowerCase();
+                        if (!message.contains('board_id') ||
+                            (!message.contains('not-null') && !message.contains('violates'))) {
+                          rethrow;
+                        }
+
+                        final board = await client
+                            .from('boards')
+                            .select('id')
+                            .eq('project_id', projectId)
+                            .order('created_at', ascending: true)
+                            .limit(1)
+                            .maybeSingle();
+                        String? fallbackBoardId = board?['id']?.toString();
+                        if (fallbackBoardId == null) {
+                          final createdBoard = await client
+                              .from('boards')
+                              .insert({
+                                'project_id': projectId,
+                                'name': 'Общая коммуникация',
+                                'created_by': currentUserId,
+                              })
+                              .select('id')
+                              .single();
+                          fallbackBoardId = createdBoard['id']?.toString();
+                        }
+                        if (fallbackBoardId == null) {
+                          throw Exception('Не удалось создать служебную доску для звонка');
+                        }
+
+                        createdRoom = await client
+                            .from('video_call_rooms')
+                            .insert({
+                              'project_id': projectId,
+                              'board_id': fallbackBoardId,
+                              'created_by': currentUserId,
+                            })
+                            .select('id')
+                            .single();
+                      }
 
                       actualRoomId = createdRoom['id'] as String;
                     } else {
