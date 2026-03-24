@@ -790,33 +790,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       return;
     }
 
-    _tasksChannel = _supabaseService.subscribeToTable(
-      tableName: 'tasks',
-      channelId: 'tasks_$projectId',
-      callback: (payload) {
-        final record = payload.newRecord.isNotEmpty
-            ? payload.newRecord
-            : payload.oldRecord;
-        if (record.isEmpty) return;
-
-        final payloadProjectId = record['project_id']?.toString();
-        if (payloadProjectId != projectId) return;
-
-        final payloadBoardId = record['board_id']?.toString();
-        if (boardId == null && payloadBoardId != null) return;
-        if (boardId != null && payloadBoardId != boardId) return;
-
-        // `payload.newRecord` comes from `tasks` table and doesn't include
-        // joined fields (assignee_name/email). So we debounce a full reload.
-        _realtimeReloadDebounceTimer?.cancel();
-        _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 1200), () {
-          loadTasks(projectId, boardId: boardId, fromRealtime: true);
-        });
-      },
-    );
-
-    _tasksChannel?.subscribe();
-    state = state.copyWith(isRealtimeConnected: true);
+    // Temporarily disable realtime auto-refresh for board stability on web.
+    // Manual refresh and explicit actions (create/update/drag) still reload data.
+    state = state.copyWith(isRealtimeConnected: false);
   }
 
   Future<void> createTask({

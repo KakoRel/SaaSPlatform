@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
@@ -908,6 +909,39 @@ class _ProjectPageEditorScreenState extends State<_ProjectPageEditorScreen> {
     super.dispose();
   }
 
+  void _wrapSelection(String prefix, String suffix) {
+    final selection = _contentController.selection;
+    final text = _contentController.text;
+    final start = selection.start;
+    final end = selection.end;
+    if (start < 0 || end < 0 || start > text.length || end > text.length) return;
+
+    if (start == end) {
+      final updated = text.replaceRange(start, end, '$prefix$suffix');
+      _contentController.text = updated;
+      _contentController.selection = TextSelection.collapsed(offset: start + prefix.length);
+      return;
+    }
+
+    final selected = text.substring(start, end);
+    final updated = text.replaceRange(start, end, '$prefix$selected$suffix');
+    _contentController.text = updated;
+    _contentController.selection = TextSelection(
+      baseOffset: start + prefix.length,
+      extentOffset: end + prefix.length,
+    );
+  }
+
+  void _insertAtCursor(String value) {
+    final selection = _contentController.selection;
+    final text = _contentController.text;
+    final start = selection.start;
+    final end = selection.end;
+    if (start < 0 || end < 0 || start > text.length || end > text.length) return;
+    _contentController.text = text.replaceRange(start, end, value);
+    _contentController.selection = TextSelection.collapsed(offset: start + value.length);
+  }
+
   Future<dynamic> _invokeGeminiAssistant(Map<String, dynamic> body) async {
     final client = SupabaseClientService.instance.client;
     final token = client.auth.currentSession?.accessToken;
@@ -960,9 +994,110 @@ class _ProjectPageEditorScreenState extends State<_ProjectPageEditorScreen> {
       if (improved != null && improved.isNotEmpty) {
         _contentController.text = improved;
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI ошибка: $e')));
     } finally {
       if (mounted) setState(() => _isAiWorking = false);
     }
+  }
+
+  Future<void> _openAiDialog() async {
+    final input = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> send() async {
+            final prompt = input.text.trim();
+            if (prompt.isEmpty) return;
+            setDialogState(() => _aiChat.add({'role': 'user', 'content': prompt}));
+            input.clear();
+
+            try {
+              final response = await _invokeGeminiAssistant({
+                'action': 'chat',
+                'text': _contentController.text,
+                'messages': _aiChat,
+                'prompt': prompt,
+              });
+              final data = response.data;
+              final text = data is Map<String, dynamic> ? data['text'] as String? : null;
+              setDialogState(() {
+                _aiChat.add({'role': 'assistant', 'content': text ?? 'Нет ответа'});
+              });
+            } catch (e) {
+              setDialogState(() {
+                _aiChat.add({'role': 'assistant', 'content': 'Ошибка: $e'});
+              });
+            }
+          }
+
+          return Dialog(
+            child: Container(
+              width: 720,
+              height: 520,
+              decoration: const BoxDecoration(color: Color(0xFF252830)),
+              child: Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('AI диалог по странице', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _aiChat.length,
+                      itemBuilder: (context, index) {
+                        final m = _aiChat[index];
+                        final isUser = m['role'] == 'user';
+                        return Align(
+                          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(10),
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            decoration: BoxDecoration(
+                              color: isUser ? const Color(0xFF4C9AFF).withValues(alpha: 0.22) : const Color(0xFF2B2D31),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF343945)),
+                            ),
+                            child: Text(
+                              m['content'] ?? '',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: input,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(hintText: 'Ваш запрос...'),
+                            onSubmitted: (_) => send(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(onPressed: send, child: const Text('Отправить')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    input.dispose();
   }
 
   @override
@@ -981,106 +1116,88 @@ class _ProjectPageEditorScreenState extends State<_ProjectPageEditorScreen> {
           IconButton(
             tooltip: 'AI диалог',
             icon: const Icon(Icons.forum_outlined),
-            onPressed: () async {
-              final input = TextEditingController();
-              await showDialog<void>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: const Color(0xFF252830),
-                  title: const Text('AI диалог по странице'),
-                  content: SizedBox(
-                    width: 600,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: 220,
-                          child: ListView(
-                            children: _aiChat
-                                .map((m) => Text(
-                                      '${m['role']}: ${m['content']}',
-                                      style: const TextStyle(color: Colors.white70),
-                                    ))
-                                .toList(),
-                          ),
-                        ),
-                        TextField(controller: input, decoration: const InputDecoration(hintText: 'Ваш запрос')),
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final prompt = input.text.trim();
-                        if (prompt.isEmpty) return;
-                        _aiChat.add({'role': 'user', 'content': prompt});
-                        final response = await _invokeGeminiAssistant({
-                          'action': 'chat',
-                          'text': _contentController.text,
-                          'messages': _aiChat,
-                          'prompt': prompt,
-                        });
-                        final data = response.data;
-                        final text = data is Map<String, dynamic> ? data['text'] as String? : null;
-                        _aiChat.add({'role': 'assistant', 'content': text ?? 'Нет ответа'});
-                        if (context.mounted) Navigator.pop(context);
-                      },
-                      child: const Text('Отправить'),
-                    ),
-                  ],
-                ),
-              );
-              input.dispose();
-              if (mounted) setState(() {});
-            },
+            onPressed: _openAiDialog,
           ),
           const SizedBox(width: 8),
           ElevatedButton(onPressed: _isSaving ? null : _save, child: const Text('Сохранить')),
           const SizedBox(width: 12),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: 'Название страницы')),
-            const SizedBox(height: 10),
-            ToggleButtons(
-              isSelected: [!_isPreviewMode, _isPreviewMode],
-              onPressed: (i) => setState(() => _isPreviewMode = i == 1),
-              children: const [
-                Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Редактировать')),
-                Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Просмотр')),
-              ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF252830),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF343945)),
+              ),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(labelText: 'Название страницы'),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      IconButton(icon: const Icon(Icons.format_bold), onPressed: () => _wrapSelection('**', '**')),
+                      IconButton(icon: const Icon(Icons.format_italic), onPressed: () => _wrapSelection('*', '*')),
+                      IconButton(icon: const Icon(Icons.title), onPressed: () => _insertAtCursor('# ')),
+                      IconButton(icon: const Icon(Icons.format_list_bulleted), onPressed: () => _insertAtCursor('- ')),
+                      IconButton(icon: const Icon(Icons.link), onPressed: () => _insertAtCursor('[текст](https://)')),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ToggleButtons(
+                    isSelected: [!_isPreviewMode, _isPreviewMode],
+                    onPressed: (i) => setState(() => _isPreviewMode = i == 1),
+                    children: const [
+                      Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Редактировать')),
+                      Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Просмотр')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: _isPreviewMode
+                        ? Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2B2D31),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF343945)),
+                            ),
+                            child: SingleChildScrollView(
+                              child: MarkdownBody(
+                                data: _contentController.text,
+                                selectable: true,
+                                softLineBreak: true,
+                                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                  p: const TextStyle(color: Colors.white70, height: 1.4),
+                                ),
+                              ),
+                            ),
+                          )
+                        : TextField(
+                            controller: _contentController,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            decoration: const InputDecoration(
+                              hintText: 'Контент страницы...',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: _isPreviewMode
-                  ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF252830),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF343945)),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _contentController.text.isEmpty ? 'Пусто' : _contentController.text,
-                          style: const TextStyle(color: Colors.white70, height: 1.4),
-                        ),
-                      ),
-                    )
-                  : TextField(
-                      controller: _contentController,
-                      expands: true,
-                      maxLines: null,
-                      minLines: null,
-                      decoration: const InputDecoration(hintText: 'Контент страницы...', border: OutlineInputBorder()),
-                    ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1951,7 +2068,18 @@ class _JiraLikeLeftPanel extends ConsumerWidget {
           _PanelItem(
             icon: Icons.home_outlined,
             title: 'Все проекты',
-            onTap: () => projectsNotifier.selectProject(null),
+            onTap: () async {
+              await projectsNotifier.loadProjects();
+              projectsNotifier.selectProject(null);
+            },
+          ),
+          _PanelItem(
+            icon: Icons.add_circle_outline,
+            title: 'Создать проект',
+            onTap: () async {
+              await projectsNotifier.loadProjects();
+              projectsNotifier.selectProject(null);
+            },
           ),
           const SizedBox(height: 12),
           const _PanelHeader(title: 'Недавние'),

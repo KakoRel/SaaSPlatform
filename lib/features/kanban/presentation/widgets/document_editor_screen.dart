@@ -437,7 +437,9 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
             child: SizedBox(
               width: 700,
               height: 520,
-              child: Column(
+              child: Container(
+                color: const Color(0xFF252830),
+                child: Column(
                 children: [
                   const Padding(
                     padding: EdgeInsets.all(12),
@@ -461,10 +463,16 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                             padding: const EdgeInsets.all(10),
                             constraints: const BoxConstraints(maxWidth: 520),
                             decoration: BoxDecoration(
-                              color: isUser ? Colors.blue[50] : Colors.grey[100],
+                              color: isUser
+                                  ? const Color(0xFF4C9AFF).withValues(alpha: 0.22)
+                                  : const Color(0xFF2B2D31),
                               borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF343945)),
                             ),
-                            child: Text(msg['content'] ?? ''),
+                            child: Text(
+                              msg['content'] ?? '',
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ),
                         );
                       },
@@ -494,6 +502,7 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                   ),
                 ],
               ),
+              ),
             ),
           );
         },
@@ -510,7 +519,9 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
         updatedAtRaw != null ? DateTime.tryParse(updatedAtRaw)?.toLocal() : null;
 
     return Scaffold(
+      backgroundColor: const Color(0xFF1E1E24),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF252830),
         title: Text(widget.initialDocument == null ? 'Новый документ' : 'Редактор документа'),
         actions: [
           TextButton.icon(
@@ -556,16 +567,16 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                     maxHeight: constraints.maxHeight - 32,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF252830),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
+                        color: Colors.black.withValues(alpha: 0.25),
                         blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),
                     ],
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+                    border: Border.all(color: const Color(0xFF343945)),
                   ),
                   padding: const EdgeInsets.all(18),
                   child: Column(
@@ -591,7 +602,7 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                               'Последнее изменение: ${updatedAt.day}.${updatedAt.month}.${updatedAt.year} '
                               '${updatedAt.hour.toString().padLeft(2, '0')}:${updatedAt.minute.toString().padLeft(2, '0')}'
                               '${updatedByText != null ? ' • $updatedByText' : ''}',
-                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                              style: const TextStyle(color: Colors.white54, fontSize: 12),
                             );
                           },
                         ),
@@ -621,9 +632,9 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                             ? Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                                  border: Border.all(color: const Color(0xFF343945)),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: Colors.white,
+                                  color: const Color(0xFF2B2D31),
                                 ),
                                 child: Scrollbar(
                                   thumbVisibility: true,
@@ -633,7 +644,7 @@ class _DocumentEditorScreenState extends ConsumerState<DocumentEditorScreen> {
                                       selectable: true,
                                       softLineBreak: true,
                                       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                                        p: Theme.of(context).textTheme.bodyMedium,
+                                        p: const TextStyle(color: Colors.white70, height: 1.4),
                                       ),
                                     ),
                                   ),
