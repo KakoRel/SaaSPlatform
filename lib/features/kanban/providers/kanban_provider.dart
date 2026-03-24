@@ -385,6 +385,34 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     return tasks.where((task) => task.issueType == TaskIssueType.epic).toList();
   }
 
+  Future<List<Task>> getAllProjectEpics({
+    required String projectId,
+  }) async {
+    try {
+      final rows = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_tasks',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          const QueryFilter('issue_type', 'eq', 'epic'),
+        ],
+        orderBy: [const Ordering('position', ascending: true)],
+      );
+      return rows.map(Task.fromJson).toList();
+    } catch (_) {
+      final rows = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'tasks',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          const QueryFilter('issue_type', 'eq', 'epic'),
+        ],
+        orderBy: [const Ordering('position', ascending: true)],
+      );
+      return rows.map(Task.fromJson).toList();
+    }
+  }
+
   Future<void> moveTaskToSprint({
     required String taskId,
     String? sprintId,
@@ -766,10 +794,22 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       tableName: 'tasks',
       channelId: 'tasks_$projectId',
       callback: (payload) {
+        final record = payload.newRecord.isNotEmpty
+            ? payload.newRecord
+            : payload.oldRecord;
+        if (record.isEmpty) return;
+
+        final payloadProjectId = record['project_id']?.toString();
+        if (payloadProjectId != projectId) return;
+
+        final payloadBoardId = record['board_id']?.toString();
+        if (boardId == null && payloadBoardId != null) return;
+        if (boardId != null && payloadBoardId != boardId) return;
+
         // `payload.newRecord` comes from `tasks` table and doesn't include
         // joined fields (assignee_name/email). So we debounce a full reload.
         _realtimeReloadDebounceTimer?.cancel();
-        _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+        _realtimeReloadDebounceTimer = Timer(const Duration(milliseconds: 1200), () {
           loadTasks(projectId, boardId: boardId, fromRealtime: true);
         });
       },

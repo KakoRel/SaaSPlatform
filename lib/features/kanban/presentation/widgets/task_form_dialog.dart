@@ -125,7 +125,9 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                     ? ref.read(kanbanProvider.notifier).getProjectSprints(selectedProject.id)
                     : Future.value([]),
                 builder: (context, snapshot) {
-                  final sprints = snapshot.data ?? [];
+                  final sprints = (snapshot.data ?? [])
+                      .where((s) => (s['status']?.toString() ?? 'planned') != 'completed')
+                      .toList();
                   return DropdownButtonFormField<String?>(
                     initialValue: _sprintId,
                     decoration: const InputDecoration(labelText: 'Спринт'),

@@ -784,7 +784,7 @@ class _PagesTabState extends ConsumerState<_PagesTab> {
                 ),
                 FilledButton.icon(
                   onPressed: () async {
-                    final created = await _showPageDialog(context, notifier);
+                    final created = await _openPageEditor(context, notifier);
                     if (created) _refresh();
                   },
                   icon: const Icon(Icons.add),
@@ -812,13 +812,17 @@ class _PagesTabState extends ConsumerState<_PagesTab> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white70),
                   ),
+                  onTap: () async {
+                    final updated = await _openPageEditor(context, notifier, page: page);
+                    if (updated) _refresh();
+                  },
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit_outlined),
                         onPressed: () async {
-                          final updated = await _showPageDialog(
+                          final updated = await _openPageEditor(
                             context,
                             notifier,
                             page: page,
@@ -844,59 +848,242 @@ class _PagesTabState extends ConsumerState<_PagesTab> {
     );
   }
 
-  Future<bool> _showPageDialog(
+  Future<bool> _openPageEditor(
     BuildContext context,
     KanbanNotifier notifier, {
     Map<String, dynamic>? page,
   }) async {
-    final titleController = TextEditingController(text: page?['title'] as String? ?? '');
-    final contentController = TextEditingController(text: page?['content'] as String? ?? '');
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(page == null ? 'Новая страница' : 'Редактировать страницу'),
-        content: SizedBox(
-          width: 560,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Название'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: contentController,
-                maxLines: 8,
-                decoration: const InputDecoration(labelText: 'Контент'),
-              ),
-            ],
-          ),
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ProjectPageEditorScreen(
+          projectId: widget.projectId,
+          notifier: notifier,
+          initialPage: page,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Сохранить')),
-        ],
       ),
     );
+    return saved == true;
+  }
+}
 
-    if (save == true && titleController.text.trim().isNotEmpty) {
-      if (page == null) {
-        final created = await notifier.createProjectPage(
+class _ProjectPageEditorScreen extends StatefulWidget {
+  const _ProjectPageEditorScreen({
+    required this.projectId,
+    required this.notifier,
+    this.initialPage,
+  });
+
+  final String projectId;
+  final KanbanNotifier notifier;
+  final Map<String, dynamic>? initialPage;
+
+  @override
+  State<_ProjectPageEditorScreen> createState() => _ProjectPageEditorScreenState();
+}
+
+class _ProjectPageEditorScreenState extends State<_ProjectPageEditorScreen> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _contentController;
+  bool _isSaving = false;
+  bool _isAiWorking = false;
+  bool _isPreviewMode = false;
+  final List<Map<String, String>> _aiChat = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(
+      text: widget.initialPage?['title'] as String? ?? 'Новая страница',
+    );
+    _contentController = TextEditingController(
+      text: widget.initialPage?['content'] as String? ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  Future<dynamic> _invokeGeminiAssistant(Map<String, dynamic> body) async {
+    final client = SupabaseClientService.instance.client;
+    final token = client.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) throw Exception('Нет активной сессии');
+    return client.functions.invoke(
+      'gemini-assistant',
+      body: body,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'apikey': AppConstants.supabaseAnonKey,
+      },
+    );
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      if (widget.initialPage == null) {
+        final created = await widget.notifier.createProjectPage(
           projectId: widget.projectId,
-          title: titleController.text.trim(),
-          content: contentController.text.trim(),
+          title: title,
+          content: _contentController.text.trim(),
         );
-        return created != null;
+        if (created != null && mounted) Navigator.pop(context, true);
+      } else {
+        final updated = await widget.notifier.updateProjectPage(
+          id: widget.initialPage!['id'] as String,
+          title: title,
+          content: _contentController.text.trim(),
+        );
+        if (updated != null && mounted) Navigator.pop(context, true);
       }
-      final updated = await notifier.updateProjectPage(
-        id: page['id'] as String,
-        title: titleController.text.trim(),
-        content: contentController.text.trim(),
-      );
-      return updated != null;
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-    return false;
+  }
+
+  Future<void> _improveWithAi() async {
+    setState(() => _isAiWorking = true);
+    try {
+      final response = await _invokeGeminiAssistant({
+        'action': 'improve',
+        'text': _contentController.text,
+        'instruction': 'Улучши структуру и читаемость текста, сохрани смысл.',
+      });
+      final data = response.data;
+      final improved = data is Map<String, dynamic> ? data['text'] as String? : null;
+      if (improved != null && improved.isNotEmpty) {
+        _contentController.text = improved;
+      }
+    } finally {
+      if (mounted) setState(() => _isAiWorking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF1E1E24),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF252830),
+        title: Text(widget.initialPage == null ? 'Новая страница' : 'Редактор страницы'),
+        actions: [
+          TextButton.icon(
+            onPressed: _isAiWorking ? null : _improveWithAi,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text('Улучшить с AI'),
+          ),
+          IconButton(
+            tooltip: 'AI диалог',
+            icon: const Icon(Icons.forum_outlined),
+            onPressed: () async {
+              final input = TextEditingController();
+              await showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF252830),
+                  title: const Text('AI диалог по странице'),
+                  content: SizedBox(
+                    width: 600,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 220,
+                          child: ListView(
+                            children: _aiChat
+                                .map((m) => Text(
+                                      '${m['role']}: ${m['content']}',
+                                      style: const TextStyle(color: Colors.white70),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                        TextField(controller: input, decoration: const InputDecoration(hintText: 'Ваш запрос')),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final prompt = input.text.trim();
+                        if (prompt.isEmpty) return;
+                        _aiChat.add({'role': 'user', 'content': prompt});
+                        final response = await _invokeGeminiAssistant({
+                          'action': 'chat',
+                          'text': _contentController.text,
+                          'messages': _aiChat,
+                          'prompt': prompt,
+                        });
+                        final data = response.data;
+                        final text = data is Map<String, dynamic> ? data['text'] as String? : null;
+                        _aiChat.add({'role': 'assistant', 'content': text ?? 'Нет ответа'});
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      child: const Text('Отправить'),
+                    ),
+                  ],
+                ),
+              );
+              input.dispose();
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(onPressed: _isSaving ? null : _save, child: const Text('Сохранить')),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(controller: _titleController, decoration: const InputDecoration(labelText: 'Название страницы')),
+            const SizedBox(height: 10),
+            ToggleButtons(
+              isSelected: [!_isPreviewMode, _isPreviewMode],
+              onPressed: (i) => setState(() => _isPreviewMode = i == 1),
+              children: const [
+                Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Редактировать')),
+                Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('Просмотр')),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _isPreviewMode
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF252830),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF343945)),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          _contentController.text.isEmpty ? 'Пусто' : _contentController.text,
+                          style: const TextStyle(color: Colors.white70, height: 1.4),
+                        ),
+                      ),
+                    )
+                  : TextField(
+                      controller: _contentController,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      decoration: const InputDecoration(hintText: 'Контент страницы...', border: OutlineInputBorder()),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -2029,7 +2216,9 @@ class _QuickCreateIssueDialogState extends ConsumerState<_QuickCreateIssueDialog
                 FutureBuilder<List<Map<String, dynamic>>>(
                   future: kanbanNotifier.getProjectSprints(widget.projectId),
                   builder: (context, snapshot) {
-                    final sprints = snapshot.data ?? [];
+                    final sprints = (snapshot.data ?? [])
+                        .where((s) => (s['status']?.toString() ?? 'planned') != 'completed')
+                        .toList();
                     return DropdownButtonFormField<String?>(
                       initialValue: _sprintId,
                       decoration: const InputDecoration(labelText: 'Спринт'),
@@ -2051,9 +2240,8 @@ class _QuickCreateIssueDialogState extends ConsumerState<_QuickCreateIssueDialog
                 ),
                 const SizedBox(height: 10),
                 FutureBuilder<List<Task>>(
-                  future: kanbanNotifier.getProjectEpics(
+                  future: kanbanNotifier.getAllProjectEpics(
                     projectId: widget.projectId,
-                    boardId: widget.boardId,
                   ),
                   builder: (context, snapshot) {
                     final epics = snapshot.data ?? [];

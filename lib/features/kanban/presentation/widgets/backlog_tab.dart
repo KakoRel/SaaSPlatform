@@ -20,6 +20,7 @@ class BacklogTab extends ConsumerStatefulWidget {
 
 class _BacklogTabState extends ConsumerState<BacklogTab> {
   int _reloadKey = 0;
+  String? _selectedSprintId;
 
   void _refresh() {
     if (mounted) {
@@ -40,23 +41,34 @@ class _BacklogTabState extends ConsumerState<BacklogTab> {
         }
 
         final sprints = snapshot.data ?? [];
+        final openSprints = sprints
+            .where((s) => (s['status']?.toString() ?? 'planned') != 'completed')
+            .toList();
         Map<String, dynamic>? activeSprint;
-        for (final sprint in sprints) {
+        for (final sprint in openSprints) {
           if (sprint['is_active'] == true) {
             activeSprint = sprint;
             break;
           }
         }
+        final selectedSprint = _selectedSprintId == null
+            ? null
+            : openSprints
+                .where((s) => s['id']?.toString() == _selectedSprintId)
+                .cast<Map<String, dynamic>?>()
+                .firstWhere((s) => s != null, orElse: () => null);
         final planningSprint =
-            activeSprint ?? (sprints.isNotEmpty ? sprints.first : null);
+            selectedSprint ?? activeSprint ?? (openSprints.isNotEmpty ? openSprints.first : null);
 
         return Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
               _BacklogHeader(
-                sprints: sprints,
+                sprints: openSprints,
                 activeSprint: activeSprint,
+                selectedSprintId: planningSprint?['id']?.toString(),
+                onSprintSelected: (id) => setState(() => _selectedSprintId = id),
                 onCreateSprint: () async {
                   final created = await _showCreateSprintDialog(context, notifier);
                   if (created) _refresh();
@@ -82,6 +94,11 @@ class _BacklogTabState extends ConsumerState<BacklogTab> {
                         );
                         if (ok) _refresh();
                       },
+              ),
+              const SizedBox(height: 10),
+              _EpicsMiniSection(
+                projectId: widget.projectId,
+                onEpicCreated: _refresh,
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -187,6 +204,8 @@ class _BacklogHeader extends StatelessWidget {
   const _BacklogHeader({
     required this.sprints,
     required this.activeSprint,
+    required this.selectedSprintId,
+    required this.onSprintSelected,
     required this.onCreateSprint,
     required this.onStartSprint,
     required this.onCompleteSprint,
@@ -194,6 +213,8 @@ class _BacklogHeader extends StatelessWidget {
 
   final List<Map<String, dynamic>> sprints;
   final Map<String, dynamic>? activeSprint;
+  final String? selectedSprintId;
+  final ValueChanged<String?> onSprintSelected;
   final Future<void> Function() onCreateSprint;
   final Future<void> Function()? onStartSprint;
   final Future<void> Function()? onCompleteSprint;
@@ -221,6 +242,27 @@ class _BacklogHeader extends StatelessWidget {
             style: const TextStyle(color: Colors.white70),
           ),
           const SizedBox(width: 10),
+          if (sprints.isNotEmpty)
+            SizedBox(
+              width: 220,
+              child: DropdownButtonFormField<String?>(
+                initialValue: selectedSprintId,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  labelText: 'Спринт',
+                ),
+                items: sprints
+                    .map(
+                      (s) => DropdownMenuItem<String?>(
+                        value: s['id'] as String?,
+                        child: Text((s['name'] as String?) ?? 'Спринт'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: onSprintSelected,
+              ),
+            ),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: onCreateSprint,
             icon: const Icon(Icons.add),
@@ -402,6 +444,132 @@ class _EmptySprintLane extends StatelessWidget {
           'Создайте спринт для планирования задач',
           style: TextStyle(color: Colors.white70),
         ),
+      ),
+    );
+  }
+}
+
+class _EpicsMiniSection extends ConsumerWidget {
+  const _EpicsMiniSection({
+    required this.projectId,
+    required this.onEpicCreated,
+  });
+
+  final String projectId;
+  final VoidCallback onEpicCreated;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(kanbanProvider.notifier);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF252830),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF323844)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Эпики',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final titleController = TextEditingController();
+                  final descriptionController = TextEditingController();
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Новый эпик'),
+                      content: SizedBox(
+                        width: 460,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: titleController,
+                              decoration: const InputDecoration(labelText: 'Название эпика'),
+                              autofocus: true,
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: descriptionController,
+                              maxLines: 3,
+                              decoration: const InputDecoration(labelText: 'Описание'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Отмена'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Создать'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (ok == true && titleController.text.trim().isNotEmpty) {
+                    await notifier.createTask(
+                      title: titleController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      issueType: TaskIssueType.epic,
+                      sprintId: '',
+                    );
+                    onEpicCreated();
+                  }
+                  titleController.dispose();
+                  descriptionController.dispose();
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Создать эпик'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FutureBuilder<List<Task>>(
+            future: notifier.getAllProjectEpics(projectId: projectId),
+            builder: (context, snapshot) {
+              final epics = snapshot.data ?? [];
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              }
+              if (epics.isEmpty) {
+                return const Text('Эпиков пока нет', style: TextStyle(color: Colors.white54));
+              }
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: epics
+                    .map(
+                      (e) => Chip(
+                        label: Text(e.title),
+                        avatar: const Icon(Icons.auto_awesome, size: 14),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
