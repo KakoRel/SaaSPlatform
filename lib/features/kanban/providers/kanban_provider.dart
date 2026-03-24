@@ -792,9 +792,130 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       return;
     }
 
-    // Temporarily disable realtime auto-refresh for board stability on web.
-    // Manual refresh and explicit actions (create/update/drag) still reload data.
-    state = state.copyWith(isRealtimeConnected: false);
+    _tasksChannel = _supabaseService.subscribeToTable(
+      tableName: 'tasks',
+      channelId: 'kanban_tasks_${projectId}_${boardId ?? 'main'}',
+      callback: (payload) async {
+        final currentProjectId = state.currentProjectId;
+        if (currentProjectId == null || currentProjectId != projectId) return;
+
+        final record = (payload.newRecord.isNotEmpty
+                ? payload.newRecord
+                : payload.oldRecord)
+            as Map<String, dynamic>?;
+        if (record == null || record.isEmpty) return;
+
+        final recordProjectId = record['project_id']?.toString();
+        if (recordProjectId != currentProjectId) return;
+
+        final recordBoardId = record['board_id']?.toString();
+        final currentBoardId = state.currentBoardId;
+        if (currentBoardId == null) {
+          if (recordBoardId != null) return;
+        } else if (recordBoardId != currentBoardId) {
+          return;
+        }
+
+        final taskId = record['id']?.toString();
+        if (taskId == null || taskId.isEmpty) return;
+
+        if (payload.eventType == PostgresChangeEvent.delete) {
+          _removeTaskFromState(taskId);
+          return;
+        }
+
+        final task = await _fetchTaskById(taskId, projectId: currentProjectId);
+        if (task == null) {
+          _removeTaskFromState(taskId);
+          return;
+        }
+
+        _upsertTaskInState(task);
+      },
+    )..subscribe();
+
+    state = state.copyWith(isRealtimeConnected: true);
+  }
+
+  Future<Task?> _fetchTaskById(
+    String taskId, {
+    required String projectId,
+  }) async {
+    try {
+      final row = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: 'project_tasks',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('id', 'eq', taskId),
+          QueryFilter('project_id', 'eq', projectId),
+        ],
+      );
+      if (row != null) {
+        return Task.fromJson(row);
+      }
+    } catch (_) {
+      // Fallback below for older DBs without a full project_tasks view.
+    }
+
+    try {
+      final row = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: 'tasks',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('id', 'eq', taskId),
+          QueryFilter('project_id', 'eq', projectId),
+        ],
+      );
+      if (row != null) {
+        return Task.fromJson(row);
+      }
+    } catch (_) {
+      // no-op
+    }
+    return null;
+  }
+
+  bool _isTaskVisibleInBoard(Task task) {
+    final currentBoardId = state.currentBoardId;
+    if (currentBoardId == null) {
+      if (task.boardId != null) return false;
+    } else if (task.boardId != currentBoardId) {
+      return false;
+    }
+
+    if (task.issueType == TaskIssueType.epic) return true;
+    return task.sprintId == state.activeSprintId;
+  }
+
+  void _removeTaskFromState(String taskId) {
+    final updated = <TaskStatus, List<Task>>{};
+    for (final entry in state.tasksByStatus.entries) {
+      updated[entry.key] = entry.value.where((task) => task.id != taskId).toList()
+        ..sort((a, b) => a.position.compareTo(b.position));
+    }
+    state = state.copyWith(tasksByStatus: updated);
+  }
+
+  void _upsertTaskInState(Task task) {
+    final updated = <TaskStatus, List<Task>>{};
+    for (final status in TaskStatus.values) {
+      final source = state.tasksByStatus[status] ?? const <Task>[];
+      updated[status] = source.where((t) => t.id != task.id).toList();
+    }
+
+    if (_isTaskVisibleInBoard(task)) {
+      updated[task.status] = [
+        ...(updated[task.status] ?? const <Task>[]),
+        task,
+      ];
+    }
+
+    for (final status in TaskStatus.values) {
+      updated[status] = (updated[status] ?? const <Task>[])
+        ..sort((a, b) => a.position.compareTo(b.position));
+    }
+
+    state = state.copyWith(tasksByStatus: updated);
   }
 
   Future<void> createTask({
