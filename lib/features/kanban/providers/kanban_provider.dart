@@ -16,6 +16,7 @@ class KanbanState {
     this.error,
     this.currentProjectId,
     this.currentBoardId,
+    this.activeSprintId,
     this.isRealtimeConnected = false,
     this.isDemoData = false,
     this.demoMessage,
@@ -26,6 +27,7 @@ class KanbanState {
   final String? error;
   final String? currentProjectId;
   final String? currentBoardId;
+  final String? activeSprintId;
   final bool isRealtimeConnected;
   final bool isDemoData;
   final String? demoMessage;
@@ -36,6 +38,7 @@ class KanbanState {
     String? error,
     String? currentProjectId,
     String? currentBoardId,
+    String? activeSprintId,
     bool? isRealtimeConnected,
     bool clearError = false,
     bool? isDemoData,
@@ -48,6 +51,7 @@ class KanbanState {
       error: clearError ? null : (error ?? this.error),
       currentProjectId: currentProjectId ?? this.currentProjectId,
       currentBoardId: currentBoardId ?? this.currentBoardId,
+      activeSprintId: activeSprintId ?? this.activeSprintId,
       isRealtimeConnected: isRealtimeConnected ?? this.isRealtimeConnected,
       isDemoData: isDemoData ?? this.isDemoData,
       demoMessage: clearDemoMessage ? null : (demoMessage ?? this.demoMessage),
@@ -96,12 +100,13 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       await _checkProjectAccess(projectId);
 
       final tasks = await _fetchTasks(projectId, boardId: boardId);
+      final activeSprintId = await _getActiveSprintId(projectId);
 
       final tasksByStatus = <TaskStatus, List<Task>>{
         for (final status in TaskStatus.values) status: [],
       };
 
-      for (final task in tasks) {
+      for (final task in tasks.where((t) => t.sprintId == activeSprintId)) {
         tasksByStatus[task.status]!.add(task);
       }
 
@@ -112,6 +117,7 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       state = state.copyWith(
         tasksByStatus: tasksByStatus,
         isLoading: false,
+        activeSprintId: activeSprintId,
         isDemoData: false,
       );
 
@@ -213,6 +219,445 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     return tasks;
   }
 
+  Future<List<Map<String, dynamic>>> getProjectSprints(String projectId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'sprints',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('created_at', ascending: false)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> createSprint({
+    required String projectId,
+    required String name,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      return await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'sprints',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'name': name,
+          'start_date': startDate?.toIso8601String(),
+          'end_date': endDate?.toIso8601String(),
+          'status': 'planned',
+          'is_active': false,
+          'created_by': _supabaseService.currentUserId,
+        },
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<bool> startSprint({
+    required String projectId,
+    required String sprintId,
+  }) async {
+    try {
+      final sprints = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'sprints',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+      );
+
+      for (final sprint in sprints) {
+        final id = sprint['id'] as String?;
+        if (id == null) continue;
+        await _supabaseService.update<Map<String, dynamic>>(
+          tableName: 'sprints',
+          id: id,
+          fromJson: (json) => json,
+          data: {
+            'is_active': id == sprintId,
+            'status': id == sprintId ? 'active' : sprint['status'],
+          },
+        );
+      }
+
+      state = state.copyWith(activeSprintId: sprintId);
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> completeSprint({
+    required String sprintId,
+  }) async {
+    try {
+      await _supabaseService.update<Map<String, dynamic>>(
+        tableName: 'sprints',
+        id: sprintId,
+        fromJson: (json) => json,
+        data: {
+          'is_active': false,
+          'status': 'completed',
+          'end_date': DateTime.now().toIso8601String(),
+        },
+      );
+
+      if (state.activeSprintId == sprintId) {
+        state = state.copyWith(activeSprintId: null);
+      }
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<List<Task>> getBacklogTasks({
+    required String projectId,
+    String? boardId,
+  }) async {
+    final tasks = await _fetchTasks(projectId, boardId: boardId);
+    return tasks.where((task) => task.sprintId == null).toList();
+  }
+
+  Future<List<Task>> getSprintTasks({
+    required String projectId,
+    required String sprintId,
+    String? boardId,
+  }) async {
+    final tasks = await _fetchTasks(projectId, boardId: boardId);
+    return tasks.where((task) => task.sprintId == sprintId).toList();
+  }
+
+  Future<List<Task>> getProjectEpics({
+    required String projectId,
+    String? boardId,
+  }) async {
+    final tasks = await _fetchTasks(projectId, boardId: boardId);
+    return tasks.where((task) => task.issueType == TaskIssueType.epic).toList();
+  }
+
+  Future<void> moveTaskToSprint({
+    required String taskId,
+    String? sprintId,
+  }) async {
+    try {
+      await _supabaseService.update<Map<String, dynamic>>(
+        tableName: 'tasks',
+        id: taskId,
+        data: {'sprint_id': sprintId},
+        fromJson: (json) => json,
+      );
+      if (state.currentProjectId != null) {
+        await loadTasks(state.currentProjectId!, boardId: state.currentBoardId);
+      }
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getProjectPages(String projectId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_pages',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('updated_at', ascending: false)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> createProjectPage({
+    required String projectId,
+    required String title,
+    required String content,
+  }) async {
+    try {
+      return await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'project_pages',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'title': title,
+          'content': content,
+          'created_by': _supabaseService.currentUserId,
+          'updated_by': _supabaseService.currentUserId,
+        },
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateProjectPage({
+    required String id,
+    required String title,
+    required String content,
+  }) async {
+    try {
+      return await _supabaseService.update<Map<String, dynamic>>(
+        tableName: 'project_pages',
+        id: id,
+        fromJson: (json) => json,
+        data: {
+          'title': title,
+          'content': content,
+          'updated_by': _supabaseService.currentUserId,
+        },
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<void> deleteProjectPage(String id) async {
+    try {
+      await _supabaseService.delete(tableName: 'project_pages', id: id);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getProjectForms(String projectId) async {
+    try {
+      return await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'project_forms',
+        fromJson: (json) => json,
+        filters: [QueryFilter('project_id', 'eq', projectId)],
+        orderBy: [const Ordering('updated_at', ascending: false)],
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> createProjectForm({
+    required String projectId,
+    required String title,
+    String? description,
+    List<Map<String, dynamic>> fields = const [],
+    Map<String, dynamic> issueDefaults = const {},
+  }) async {
+    try {
+      return await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'project_forms',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'title': title,
+          'description': description,
+          'fields': fields,
+          'issue_defaults': issueDefaults,
+          'created_by': _supabaseService.currentUserId,
+          'updated_by': _supabaseService.currentUserId,
+        },
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateProjectForm({
+    required String id,
+    required String title,
+    String? description,
+    List<Map<String, dynamic>>? fields,
+    Map<String, dynamic>? issueDefaults,
+    bool? isActive,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'title': title,
+        'description': description,
+        'updated_by': _supabaseService.currentUserId,
+      };
+      if (fields != null) data['fields'] = fields;
+      if (issueDefaults != null) data['issue_defaults'] = issueDefaults;
+      if (isActive != null) data['is_active'] = isActive;
+      return await _supabaseService.update<Map<String, dynamic>>(
+        tableName: 'project_forms',
+        id: id,
+        fromJson: (json) => json,
+        data: data,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<void> deleteProjectForm(String id) async {
+    try {
+      await _supabaseService.delete(tableName: 'project_forms', id: id);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<Map<String, dynamic>?> submitProjectForm({
+    required String projectId,
+    required String formId,
+    required Map<String, dynamic> answers,
+    Map<String, dynamic> issueDefaults = const {},
+    String? boardId,
+    String? sprintId,
+  }) async {
+    try {
+      final issueTypeRaw = issueDefaults['issue_type']?.toString();
+      final priorityRaw = issueDefaults['priority']?.toString();
+      final assigneeRaw = issueDefaults['assignee_id']?.toString();
+      final boardRaw = issueDefaults['board_id']?.toString();
+      final sprintRaw = issueDefaults['sprint_id']?.toString();
+
+      final defaultIssueType = TaskIssueType.values.any((t) => t.name == issueTypeRaw)
+          ? issueTypeRaw!
+          : TaskIssueType.task.name;
+      final defaultPriority = TaskPriority.values.any((p) => p.name == priorityRaw)
+          ? priorityRaw!
+          : TaskPriority.medium.name;
+
+      // Validate references belong to the same project; otherwise safely ignore.
+      final defaultBoardId = await _recordBelongsToProject(
+        tableName: 'boards',
+        recordId: boardRaw,
+        projectId: projectId,
+      )
+          ? boardRaw
+          : null;
+      final defaultSprintId = await _recordBelongsToProject(
+        tableName: 'sprints',
+        recordId: sprintRaw,
+        projectId: projectId,
+      )
+          ? sprintRaw
+          : null;
+      final defaultAssigneeId = await _isProjectMember(
+        projectId: projectId,
+        userId: assigneeRaw,
+      )
+          ? assigneeRaw
+          : null;
+
+      final taskTitle = (answers['title']?.toString().trim().isNotEmpty ?? false)
+          ? answers['title'].toString().trim()
+          : 'Запрос из формы';
+      final taskDescription = answers.entries
+          .map((e) => '${e.key}: ${e.value}')
+          .join('\n');
+
+      final createdTask = await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'tasks',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'title': taskTitle,
+          'description': taskDescription,
+          'assignee_id': defaultAssigneeId,
+          'creator_id': _supabaseService.currentUserId,
+          'priority': defaultPriority,
+          'issue_type': defaultIssueType,
+          'status': TaskStatus.todo.toDbValue(),
+          'board_id': defaultBoardId ?? boardId ?? state.currentBoardId,
+          'sprint_id': defaultSprintId ?? sprintId ?? state.activeSprintId,
+          'position': _getNextPosition(TaskStatus.todo),
+        },
+      );
+
+      return await _supabaseService.insert<Map<String, dynamic>>(
+        tableName: 'project_form_submissions',
+        fromJson: (json) => json,
+        data: {
+          'project_id': projectId,
+          'form_id': formId,
+          'submitted_by': _supabaseService.currentUserId,
+          'answers': answers,
+          'created_task_id': createdTask['id'],
+        },
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return null;
+    }
+  }
+
+  Future<bool> _recordBelongsToProject({
+    required String tableName,
+    required String? recordId,
+    required String projectId,
+  }) async {
+    if (recordId == null || recordId.isEmpty) return false;
+    try {
+      final row = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: tableName,
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('id', 'eq', recordId),
+          QueryFilter('project_id', 'eq', projectId),
+        ],
+      );
+      return row != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _isProjectMember({
+    required String projectId,
+    required String? userId,
+  }) async {
+    if (userId == null || userId.isEmpty) return false;
+    try {
+      final row = await _supabaseService.fetchSingle<Map<String, dynamic>>(
+        tableName: 'project_members',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          QueryFilter('user_id', 'eq', userId),
+        ],
+      );
+      return row != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String?> _getActiveSprintId(String projectId) async {
+    try {
+      final sprints = await _supabaseService.fetchList<Map<String, dynamic>>(
+        tableName: 'sprints',
+        fromJson: (json) => json,
+        filters: [
+          QueryFilter('project_id', 'eq', projectId),
+          const QueryFilter('is_active', 'eq', true),
+        ],
+        orderBy: [const Ordering('start_date', ascending: false)],
+      );
+      if (sprints.isEmpty) return null;
+      return sprints.first['id'] as String?;
+    } catch (_) {
+      // Keep backward compatibility if migration is not applied yet.
+      return null;
+    }
+  }
+
   void _setupRealtimeSubscription(String projectId, {String? boardId}) {
     _tasksChannel?.unsubscribe();
 
@@ -242,6 +687,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? description,
     String? assigneeId,
     TaskPriority priority = TaskPriority.medium,
+    TaskIssueType issueType = TaskIssueType.task,
+    String? epicId,
+    String? sprintId,
     DateTime? dueDate,
     String? imageUrl,
   }) async {
@@ -258,6 +706,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
           'assignee_id': assigneeId,
           'creator_id': _supabaseService.currentUserId!,
           'priority': priority.name,
+          'issue_type': issueType.name,
+          'epic_id': epicId,
+          'sprint_id': sprintId ?? state.activeSprintId,
           'due_date': dueDate?.toIso8601String(),
           'image_url': imageUrl,
           'position': _getNextPosition(TaskStatus.todo),
@@ -295,6 +746,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
     String? description,
     String? assigneeId,
     TaskPriority? priority,
+    TaskIssueType? issueType,
+    String? epicId,
+    String? sprintId,
     DateTime? dueDate,
     TaskStatus? status,
     String? imageUrl,
@@ -305,6 +759,9 @@ class KanbanNotifier extends StateNotifier<KanbanState> {
       if (description != null) updateData['description'] = description;
       if (assigneeId != null) updateData['assignee_id'] = assigneeId;
       if (priority != null) updateData['priority'] = priority.name;
+      if (issueType != null) updateData['issue_type'] = issueType.name;
+      if (epicId != null) updateData['epic_id'] = epicId;
+      if (sprintId != null) updateData['sprint_id'] = sprintId;
       if (dueDate != null) updateData['due_date'] = dueDate.toIso8601String();
       if (status != null) updateData['status'] = status.toDbValue();
       if (imageUrl != null) updateData['image_url'] = imageUrl;

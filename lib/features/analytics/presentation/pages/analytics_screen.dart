@@ -179,10 +179,10 @@ class AnalyticsScreen extends ConsumerWidget {
 
   String _getStatusLabel(TaskStatus status) {
     switch (status) {
-      case TaskStatus.todo: return 'To Do';
-      case TaskStatus.inProgress: return 'In Progress';
-      case TaskStatus.review: return 'Review';
-      case TaskStatus.done: return 'Done';
+      case TaskStatus.todo: return 'К выполнению';
+      case TaskStatus.inProgress: return 'В работе';
+      case TaskStatus.review: return 'На ревью';
+      case TaskStatus.done: return 'Готово';
     }
   }
 

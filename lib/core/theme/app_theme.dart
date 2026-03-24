@@ -4,6 +4,11 @@ import 'package:flutter/services.dart';
 class AppTheme {
   AppTheme._();
 
+  static const Color _bg = Color(0xFF1E1E24);
+  static const Color _surface = Color(0xFF252830);
+  static const Color _surfaceAlt = Color(0xFF2B2D31);
+  static const Color _primary = Color(0xFF4C9AFF);
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -79,14 +84,24 @@ class AppTheme {
   }
 
   static ThemeData get darkTheme {
+    const colorScheme = ColorScheme(
+      brightness: Brightness.dark,
+      primary: _primary,
+      onPrimary: Colors.white,
+      secondary: Color(0xFF2684FF),
+      onSecondary: Colors.white,
+      error: Color(0xFFEF5350),
+      onError: Colors.white,
+      surface: _surface,
+      onSurface: Color(0xFFE5E7EB),
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6750A4),
-        brightness: Brightness.dark,
-      ),
-      
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: _bg,
+
       appBarTheme: const AppBarTheme(
         centerTitle: true,
         elevation: 0,
@@ -98,17 +113,19 @@ class AppTheme {
       ),
 
       cardTheme: CardThemeData(
-        elevation: 4,
-        color: const Color(0xFF1E1E1E),
+        elevation: 0,
+        color: _surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -121,8 +138,19 @@ class AppTheme {
       ),
 
       inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: _surfaceAlt,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFF3B4250)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFF3B4250)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: _primary),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
@@ -141,6 +169,7 @@ class AppTheme {
       dividerTheme: const DividerThemeData(
         thickness: 1,
         space: 1,
+        color: Color(0xFF353B48),
       ),
     );
   }

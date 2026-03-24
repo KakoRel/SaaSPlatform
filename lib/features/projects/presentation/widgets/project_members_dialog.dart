@@ -85,7 +85,8 @@ class _ProjectMembersDialogState extends ConsumerState<ProjectMembersDialog> {
                       // Supabase nested select key can differ depending on relationship naming.
                       final dynamic userDataRaw = member['users'] ?? member['user'];
                       final userData = userDataRaw is Map<String, dynamic> ? userDataRaw : null;
-                      final email = userData?['email'] as String? ?? member['email'] as String? ?? 'Unknown';
+                      final email =
+                          userData?['email'] as String? ?? member['email'] as String? ?? 'Неизвестно';
                       final name = userData?['full_name'] as String? ?? member['full_name'] as String? ?? email;
                       final role = member['role'] as String? ?? 'member';
                       final memberUserId = member['user_id']?.toString() ?? '';

@@ -104,7 +104,9 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       const DropdownMenuItem(value: null, child: Text('Не назначен')),
                       ...members.map((m) {
                         final user = m['users'] as Map<String, dynamic>?;
-                        final name = user?['full_name'] as String? ?? user?['email'] as String? ?? 'Unknown';
+                        final name = user?['full_name'] as String? ??
+                            user?['email'] as String? ??
+                            'Пользователь';
                         return DropdownMenuItem(
                           value: m['user_id'] as String,
                           child: Text(name),

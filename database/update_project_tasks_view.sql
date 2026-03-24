@@ -10,6 +10,9 @@ DROP VIEW IF EXISTS public.project_tasks;
 CREATE VIEW public.project_tasks (
   id,
   project_id,
+  sprint_id,
+  issue_type,
+  epic_id,
   title,
   description,
   assignee_id,
@@ -31,6 +34,9 @@ AS
 SELECT
   t.id,
   t.project_id,
+  t.sprint_id,
+  t.issue_type,
+  t.epic_id,
   t.title,
   t.description,
   t.assignee_id,

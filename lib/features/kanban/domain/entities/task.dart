@@ -47,6 +47,20 @@ enum TaskStatus {
   }
 }
 
+enum TaskIssueType {
+  epic,
+  story,
+  task,
+  bug;
+
+  static TaskIssueType fromString(String value) {
+    return TaskIssueType.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => TaskIssueType.task,
+    );
+  }
+}
+
 class TaskMember {
   const TaskMember({
     required this.id,
@@ -75,12 +89,15 @@ class Task {
     required this.id,
     required this.projectId,
     this.boardId,
+    this.sprintId,
+    this.epicId,
     required this.title,
     this.description,
     this.assigneeId,
     required this.creatorId,
     this.status = TaskStatus.todo,
     this.priority = TaskPriority.medium,
+    this.issueType = TaskIssueType.task,
     this.dueDate,
     this.completedAt,
     this.position = 0,
@@ -94,12 +111,15 @@ class Task {
   final String id;
   final String projectId;
   final String? boardId;
+  final String? sprintId;
+  final String? epicId;
   final String title;
   final String? description;
   final String? assigneeId;
   final String creatorId;
   final TaskStatus status;
   final TaskPriority priority;
+  final TaskIssueType issueType;
   final DateTime? dueDate;
   final DateTime? completedAt;
   final int position;
@@ -121,12 +141,15 @@ class Task {
       id: json['id'] as String,
       projectId: json['project_id'] as String,
       boardId: json['board_id'] as String?,
+      sprintId: json['sprint_id'] as String?,
+      epicId: json['epic_id'] as String?,
       title: json['title'] as String,
       description: json['description'] as String?,
       assigneeId: json['assignee_id'] as String?,
       creatorId: json['creator_id'] as String,
       status: TaskStatus.fromDbValue(json['status'] as String? ?? 'todo'),
       priority: TaskPriority.fromString(json['priority'] as String? ?? 'medium'),
+      issueType: TaskIssueType.fromString(json['issue_type'] as String? ?? 'task'),
       dueDate: json['due_date'] != null ? DateTime.parse(json['due_date'] as String) : null,
       completedAt: json['completed_at'] != null ? DateTime.parse(json['completed_at'] as String) : null,
       position: json['position'] as int? ?? 0,
@@ -161,12 +184,15 @@ class Task {
       'id': id,
       'project_id': projectId,
       'board_id': boardId,
+      'sprint_id': sprintId,
+      'epic_id': epicId,
       'title': title,
       'description': description,
       'assignee_id': assigneeId,
       'creator_id': creatorId,
       'status': status.toDbValue(),
       'priority': priority.name,
+      'issue_type': issueType.name,
       'due_date': dueDate?.toIso8601String(),
       'completed_at': completedAt?.toIso8601String(),
       'position': position,
@@ -180,12 +206,15 @@ class Task {
     String? id,
     String? projectId,
     String? boardId,
+    String? sprintId,
+    String? epicId,
     String? title,
     String? description,
     String? assigneeId,
     String? creatorId,
     TaskStatus? status,
     TaskPriority? priority,
+    TaskIssueType? issueType,
     DateTime? dueDate,
     DateTime? completedAt,
     int? position,
@@ -199,12 +228,15 @@ class Task {
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
       boardId: boardId ?? this.boardId,
+      sprintId: sprintId ?? this.sprintId,
+      epicId: epicId ?? this.epicId,
       title: title ?? this.title,
       description: description ?? this.description,
       assigneeId: assigneeId ?? this.assigneeId,
       creatorId: creatorId ?? this.creatorId,
       status: status ?? this.status,
       priority: priority ?? this.priority,
+      issueType: issueType ?? this.issueType,
       dueDate: dueDate ?? this.dueDate,
       completedAt: completedAt ?? this.completedAt,
       position: position ?? this.position,
